@@ -1,3 +1,4 @@
+import type { AlertPayload, WatchedContract } from '@/types'
 import {
   saveContract,
   deleteContract,
@@ -19,12 +20,62 @@ const localStorageMock = (() => {
 
 Object.defineProperty(global, 'localStorage', { value: localStorageMock });
 
-const contract1 = { id: 'c1', address: 'GABC...001', label: 'Contract Alpha', network: 'mainnet' };
-const contract2 = { id: 'c2', address: 'GDEF...002', label: 'Contract Beta',  network: 'testnet' };
+// Fixtures previously used an `address` field that WatchedContract does not
+// have, and omitted every required one.
+const contract1: WatchedContract = {
+  id: 'c1',
+  label: 'Contract Alpha',
+  contract_id: 'CDSO4GGZH7KBUQYKOIQDCMCFSRYEPOVDUX7Z4IB5TWNTLT2GDRKDQOYR',
+  network: 'mainnet',
+  rules: [],
+  webhook_url: 'https://hooks.example.com/alpha',
+  created_at: 1,
+  updated_at: 1,
+};
+const contract2: WatchedContract = {
+  id: 'c2',
+  label: 'Contract Beta',
+  contract_id: 'CCSHRYACRNVSLC5NP3V2DL6LGID57TQT2TJXVUVXBBZX6SED6N3F7X6J',
+  network: 'testnet',
+  rules: [],
+  webhook_url: 'https://hooks.example.com/beta',
+  created_at: 2,
+  updated_at: 2,
+};
 
-const alert1 = { id: 'a1', contractId: 'c1', type: 'transfer', threshold: 100 };
-const alert2 = { id: 'a2', contractId: 'c1', type: 'invocation', threshold: 0 };
-const alert3 = { id: 'a3', contractId: 'c1', type: 'balance',   threshold: 500 };
+const alert1: AlertPayload & { id?: string; contractId?: string } = {
+  id: 'a1',
+  contractId: 'c1',
+  label: 'Contract Alpha',
+  contract_id: 'c1',
+  network: 'testnet',
+  rule_triggered: 'LargeTransfer',
+  transaction_hash: 'tx1',
+  timestamp: 1,
+  horizon_link: 'https://horizon-testnet.stellar.org/transactions/tx1',
+};
+const alert2: AlertPayload & { id?: string; contractId?: string } = {
+  id: 'a2',
+  contractId: 'c1',
+  label: 'Contract Alpha',
+  contract_id: 'c1',
+  network: 'testnet',
+  rule_triggered: 'FunctionCalled',
+  transaction_hash: 'tx2',
+  timestamp: 2,
+  horizon_link: 'https://horizon-testnet.stellar.org/transactions/tx2',
+};
+const alert3: AlertPayload & { id?: string; contractId?: string } = {
+  id: 'a3',
+  contractId: 'c1',
+  label: 'Contract Alpha',
+  contract_id: 'c1',
+  network: 'testnet',
+  rule_triggered: 'AnyTransaction',
+  transaction_hash: 'tx3',
+  timestamp: 3,
+  horizon_link: 'https://horizon-testnet.stellar.org/transactions/tx3',
+};
 
 beforeEach(() => localStorageMock.clear());
 
@@ -91,7 +142,7 @@ describe('saveAlert / getAlerts — insertion order', () => {
     saveAlert(alert2);
     saveAlert(alert3);
     const alerts = getAlerts('c1');
-    expect(alerts.map(a => a.id)).toEqual(['a1', 'a2', 'a3']);
+    expect(alerts.map((a) => (a as { id?: string }).id)).toEqual(['a1', 'a2', 'a3']);
   });
 
   it('returns empty array when no alerts exist for a contract (empty fallback)', () => {
@@ -106,6 +157,6 @@ describe('deleteAlert', () => {
     deleteAlert('a1');
     const alerts = getAlerts('c1');
     expect(alerts).toHaveLength(1);
-    expect(alerts[0].id).toBe('a2');
+    expect((alerts[0] as { id?: string }).id).toBe('a2');
   });
 });

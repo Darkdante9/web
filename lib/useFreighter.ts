@@ -10,6 +10,8 @@ declare global {
       getNetwork: () => Promise<string>
       signTransaction: (xdr: string, options: { networkPassphrase: string }) => Promise<string>
     }
+    /** Last connected public key, mirrored for components that mount later. */
+    __freighterPublicKey?: string | null
   }
 }
 
