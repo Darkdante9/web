@@ -3,12 +3,6 @@ import type { Network } from '@/types'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 
-function getAuthHeaders(): Record<string, string> {
-  // Extension point for future authenticated requests
-  // Implement token/header logic here
-  return {}
-}
-
 export async function apiFetch<T>(
   path: string,
   options?: RequestInit
@@ -40,12 +34,18 @@ export async function apiFetch<T>(
   return res.json() as Promise<T>
 }
 
+/** Result of a test webhook delivery: the HTTP status and whether it succeeded. */
+export interface TestWebhookResult {
+  status: number
+  ok: boolean
+}
+
 export async function sendTestWebhook(
   webhookUrl: string,
   contractId: string,
   network: Network = 'testnet',
-  timeoutMs = 10000
-): Promise<void> {
+  signalOrTimeoutMs: AbortSignal | number = 10000
+): Promise<TestWebhookResult> {
   const payload = {
     label: 'Test Alert',
     contract_id: contractId,
@@ -57,19 +57,25 @@ export async function sendTestWebhook(
     horizon_link: `${HORIZON_URLS[network]}/transactions/test`,
   }
 
+  // Callers either hand us their own AbortSignal or rely on the default timeout.
+  const external = typeof signalOrTimeoutMs === 'number' ? undefined : signalOrTimeoutMs
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  const timeoutId =
+    external === undefined
+      ? setTimeout(() => controller.abort(), signalOrTimeoutMs as number)
+      : undefined
+  const signal = external ?? controller.signal
 
   try {
     const res = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      signal: controller.signal,
+      signal,
     })
-    if (!res.ok) {
-      throw new Error(`Webhook returned ${res.status}`)
-    }
+    // The status is reported back rather than thrown on, so callers can show
+    // the actual code; a non-2xx is still a failed delivery.
+    return { status: res.status, ok: res.ok }
   } catch (error) {
     const err = error as { name?: string }
     if (err?.name === 'AbortError') {
@@ -77,6 +83,6 @@ export async function sendTestWebhook(
     }
     throw error
   } finally {
-    clearTimeout(timeoutId)
+    if (timeoutId !== undefined) clearTimeout(timeoutId)
   }
 }

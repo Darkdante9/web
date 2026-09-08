@@ -5,6 +5,7 @@ import { explorerTxUrl } from '@/lib/stellar'
 import { Network } from '@/types'
 import EmptyState from './EmptyState'
 import { truncateId } from '@/lib/stellar'
+import CopyButton from '@/components/CopyButton'
 import { formatDateTime } from '@/lib/format'
 import { useState } from 'react'
 import AlertRuleBadge from './AlertRuleBadge'
@@ -124,14 +125,17 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
                     <AlertRuleBadge type={alert.rule_triggered as AlertRuleType} />
                   </td>
                   <td className="py-3 pr-4">
-                    <a
-                      href={explorerTxUrl(network, alert.transaction_hash)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
-                    >
-                      {truncateId(alert.transaction_hash)}
-                    </a>
+                    <span className="inline-flex items-center gap-2">
+                      <a
+                        href={explorerTxUrl(network, alert.transaction_hash)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
+                      >
+                        {truncateId(alert.transaction_hash)}
+                      </a>
+                      <CopyButton text={alert.transaction_hash} />
+                    </span>
                   </td>
                   <td className="py-3 pr-4 font-mono text-zinc-400">
                     {alert.function_name ?? 'N/A'}

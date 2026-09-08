@@ -1,37 +1,45 @@
+import { vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import FreighterConnect from '@/components/FreighterConnect'
 
 describe('FreighterConnect', () => {
   beforeEach(() => {
     delete (window as any).freighter
-    jest.clearAllMocks()
+    delete (window as any).__freighterPublicKey
+    // the component persists the key, so without this later tests start connected
+    localStorage.clear()
+    vi.clearAllMocks()
   })
 
   describe('connection states', () => {
-    it('renders connect button when not connected', () => {
+    it('renders connect button when not connected', async () => {
       render(<FreighterConnect />)
-      expect(screen.getByText('Connect Freighter')).toBeInTheDocument()
+      expect(
+        await screen.findByRole('button', { name: /Connect Freighter/ })
+      ).toBeInTheDocument()
     })
 
     it('renders connected state with public key', async () => {
       const mockPublicKey = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
       ;(window as any).freighter = {
-        isConnected: jest.fn().mockResolvedValue(true),
-        getPublicKey: jest.fn().mockResolvedValue(mockPublicKey),
+        isConnected: vi.fn().mockResolvedValue(true),
+        getPublicKey: vi.fn().mockResolvedValue(mockPublicKey),
+        getNetwork: vi.fn().mockResolvedValue('TESTNET'),
       }
 
       render(<FreighterConnect />)
 
       await waitFor(() => {
-        expect(screen.getByText(/GAAA…AAAA/)).toBeInTheDocument()
+        expect(screen.getByText(/GAAA\.\.\.AAAA/)).toBeInTheDocument()
       })
     })
 
     it('shows disconnect button when connected', async () => {
       const mockPublicKey = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
       ;(window as any).freighter = {
-        isConnected: jest.fn().mockResolvedValue(true),
-        getPublicKey: jest.fn().mockResolvedValue(mockPublicKey),
+        isConnected: vi.fn().mockResolvedValue(true),
+        getPublicKey: vi.fn().mockResolvedValue(mockPublicKey),
+        getNetwork: vi.fn().mockResolvedValue('TESTNET'),
       }
 
       render(<FreighterConnect />)
@@ -44,8 +52,9 @@ describe('FreighterConnect', () => {
     it('disconnects when disconnect button is clicked', async () => {
       const mockPublicKey = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
       ;(window as any).freighter = {
-        isConnected: jest.fn().mockResolvedValue(true),
-        getPublicKey: jest.fn().mockResolvedValue(mockPublicKey),
+        isConnected: vi.fn().mockResolvedValue(true),
+        getPublicKey: vi.fn().mockResolvedValue(mockPublicKey),
+        getNetwork: vi.fn().mockResolvedValue('TESTNET'),
       }
 
       render(<FreighterConnect />)
@@ -57,7 +66,7 @@ describe('FreighterConnect', () => {
       fireEvent.click(screen.getByText('Disconnect'))
 
       await waitFor(() => {
-        expect(screen.getByText('Connect Freighter')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /Connect Freighter/ })).toBeInTheDocument()
       })
     })
   })
@@ -65,37 +74,39 @@ describe('FreighterConnect', () => {
   describe('rejection handling', () => {
     it('shows error when user rejects connection', async () => {
       ;(window as any).freighter = {
-        isConnected: jest.fn().mockResolvedValue(false),
-        getPublicKey: jest.fn().mockRejectedValue(new Error('User rejected')),
+        isConnected: vi.fn().mockResolvedValue(false),
+        getPublicKey: vi.fn().mockRejectedValue(new Error('User rejected')),
+        getNetwork: vi.fn().mockResolvedValue('TESTNET'),
       }
 
       render(<FreighterConnect />)
 
-      fireEvent.click(screen.getByText('Connect Freighter'))
+      fireEvent.click(await screen.findByRole('button', { name: /Connect Freighter/ }))
 
       await waitFor(() => {
-        expect(screen.getByText('Connection rejected')).toBeInTheDocument()
+        expect(screen.getByText('User rejected')).toBeInTheDocument()
       })
     })
 
     it('clears error when user tries again', async () => {
       ;(window as any).freighter = {
-        isConnected: jest.fn().mockResolvedValue(false),
-        getPublicKey: jest
+        isConnected: vi.fn().mockResolvedValue(false),
+        getPublicKey: vi
           .fn()
           .mockRejectedValueOnce(new Error('User rejected'))
           .mockResolvedValueOnce('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'),
+        getNetwork: vi.fn().mockResolvedValue('TESTNET'),
       }
 
       render(<FreighterConnect />)
 
-      fireEvent.click(screen.getByText('Connect Freighter'))
+      fireEvent.click(await screen.findByRole('button', { name: /Connect Freighter/ }))
 
       await waitFor(() => {
-        expect(screen.getByText('Connection rejected')).toBeInTheDocument()
+        expect(screen.getByText('User rejected')).toBeInTheDocument()
       })
 
-      fireEvent.click(screen.getByText('Connect Freighter'))
+      fireEvent.click(await screen.findByRole('button', { name: /Connect Freighter/ }))
 
       await waitFor(() => {
         expect(screen.queryByText('Connection rejected')).not.toBeInTheDocument()
@@ -109,7 +120,7 @@ describe('FreighterConnect', () => {
 
       render(<FreighterConnect />)
 
-      fireEvent.click(screen.getByText('Connect Freighter'))
+      fireEvent.click(await screen.findByRole('button', { name: /Connect Freighter/ }))
 
       await waitFor(() => {
         expect(screen.getByText(/Freighter not installed/)).toBeInTheDocument()
@@ -118,11 +129,11 @@ describe('FreighterConnect', () => {
 
     it('opens Freighter website when extension is not installed', async () => {
       delete (window as any).freighter
-      const windowOpenSpy = jest.spyOn(window, 'open').mockImplementation()
+      const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
 
       render(<FreighterConnect />)
 
-      fireEvent.click(screen.getByText('Connect Freighter'))
+      fireEvent.click(await screen.findByRole('button', { name: /Connect Freighter/ }))
 
       await waitFor(() => {
         expect(windowOpenSpy).toHaveBeenCalledWith('https://www.freighter.app/', '_blank')
@@ -135,15 +146,16 @@ describe('FreighterConnect', () => {
   describe('callbacks', () => {
     it('calls onConnect callback when connection succeeds', async () => {
       const mockPublicKey = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      const onConnect = jest.fn()
+      const onConnect = vi.fn()
       ;(window as any).freighter = {
-        isConnected: jest.fn().mockResolvedValue(false),
-        getPublicKey: jest.fn().mockResolvedValue(mockPublicKey),
+        isConnected: vi.fn().mockResolvedValue(false),
+        getPublicKey: vi.fn().mockResolvedValue(mockPublicKey),
+        getNetwork: vi.fn().mockResolvedValue('TESTNET'),
       }
 
       render(<FreighterConnect onConnect={onConnect} />)
 
-      fireEvent.click(screen.getByText('Connect Freighter'))
+      fireEvent.click(await screen.findByRole('button', { name: /Connect Freighter/ }))
 
       await waitFor(() => {
         expect(onConnect).toHaveBeenCalledWith(mockPublicKey)
@@ -152,10 +164,11 @@ describe('FreighterConnect', () => {
 
     it('calls onConnect callback on initial mount if already connected', async () => {
       const mockPublicKey = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      const onConnect = jest.fn()
+      const onConnect = vi.fn()
       ;(window as any).freighter = {
-        isConnected: jest.fn().mockResolvedValue(true),
-        getPublicKey: jest.fn().mockResolvedValue(mockPublicKey),
+        isConnected: vi.fn().mockResolvedValue(true),
+        getPublicKey: vi.fn().mockResolvedValue(mockPublicKey),
+        getNetwork: vi.fn().mockResolvedValue('TESTNET'),
       }
 
       render(<FreighterConnect onConnect={onConnect} />)
@@ -169,15 +182,15 @@ describe('FreighterConnect', () => {
   describe('loading state', () => {
     it('disables button while connecting', async () => {
       ;(window as any).freighter = {
-        isConnected: jest.fn().mockResolvedValue(false),
-        getPublicKey: jest.fn().mockImplementation(
+        isConnected: vi.fn().mockResolvedValue(false),
+        getPublicKey: vi.fn().mockImplementation(
           () => new Promise((resolve) => setTimeout(() => resolve('GAAAA...'), 100))
         ),
       }
 
       render(<FreighterConnect />)
 
-      const button = screen.getByText('Connect Freighter')
+      const button = await screen.findByRole('button', { name: /Connect Freighter/ })
       fireEvent.click(button)
 
       await waitFor(() => {
