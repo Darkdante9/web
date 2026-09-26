@@ -8,6 +8,7 @@ import { getContracts, getAlerts, deleteContract } from '@/lib/storage'
 import { refreshContracts } from '@/lib/contractSync'
 import ContractCard from '@/components/ContractCard'
 import EmptyState from '@/components/EmptyState'
+import ContractsSkeleton from '@/components/ContractsSkeleton'
 
 type ViewMode = 'flat' | 'grouped'
 type NetworkFilter = 'all' | Network
@@ -185,7 +186,7 @@ export default function ContractsPage() {
     setSelectionMode(false)
   }
 
-  if (!mounted) return null
+  if (!mounted) return <ContractsSkeleton />
 
   const hasAnyContracts = allContracts.length > 0
   const hasFilteredContracts = filtered.length > 0
@@ -231,121 +232,82 @@ export default function ContractsPage() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-lg w-fit" role="group" aria-label="Filter by network">
-          {NETWORK_FILTERS.map(({ value, label }) => {
-            const count = value === 'all' ? allContracts.length : allContracts.filter((contract) => contract.network === value).length
-            const isActive = networkFilter === value
-            return (
-              <button
-                key={value}
-                onClick={() => setNetworkFilter(value)}
-                aria-pressed={isActive}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
-                }`}
-              >
-                {label}
-                <span className={`text-xs px-1.5 py-0.5 rounded-full ${isActive ? 'bg-indigo-500 text-indigo-100' : 'bg-zinc-800 text-zinc-500'}`}>
-                  {count}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="flex items-center gap-3">
-          {hasAnyContracts && (
+        <div className="flex flex-wrap items-center gap-2">
+          {NETWORK_FILTERS.map((filter) => (
             <button
+              key={filter.value}
               type="button"
-              onClick={toggleSelectionMode}
-              aria-pressed={selectionMode}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                selectionMode
-                  ? 'bg-indigo-600 border-indigo-500 text-white'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-750'
+              onClick={() => setNetworkFilter(filter.value)}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                networkFilter === filter.value
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
               }`}
             >
-              {selectionMode ? 'Cancel selection' : 'Select'}
+              {filter.label}
             </button>
-          )}
+          ))}
+        </div>
 
-          {hasAnyContracts && (
-            <div className="relative">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortOption)}
-                className="appearance-none px-3 py-2 pr-8 rounded-lg bg-zinc-800 border border-zinc-700 text-sm font-medium text-zinc-200 hover:bg-zinc-750 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer"
-              >
-                {SORT_OPTIONS.map(({ value, label }) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-zinc-500">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </span>
-            </div>
-          )}
+        <div className="flex items-center gap-2">
+          <label htmlFor="contract-sort" className="sr-only">
+            Sort contracts
+          </label>
+          <select
+            id="contract-sort"
+            value={sortBy}
+            onChange={(event) => setSortBy(event.target.value as SortOption)}
+            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none"
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
 
-          {hasAnyContracts && (
-            <div className="flex items-center gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-lg w-fit" role="group" aria-label="View mode">
-              <button
-                type="button"
-                onClick={() => setViewMode('flat')}
-                aria-pressed={viewMode === 'flat'}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  viewMode === 'flat'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
-                }`}
-              >
-                Flat
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('grouped')}
-                aria-pressed={viewMode === 'grouped'}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  viewMode === 'grouped'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
-                }`}
-              >
-                Grouped
-              </button>
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={() => setViewMode((prev) => (prev === 'flat' ? 'grouped' : 'flat'))}
+            className="rounded-lg bg-zinc-800 px-3 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
+          >
+            {viewMode === 'flat' ? 'Group by network' : 'Flat view'}
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleSelectionMode}
+            className={`rounded-lg px-3 py-2 text-sm font-medium ${
+              selectionMode
+                ? 'bg-indigo-600 text-white hover:bg-indigo-500'
+                : 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700'
+            }`}
+          >
+            {selectionMode ? 'Cancel' : 'Select'}
+          </button>
         </div>
       </div>
 
-      {selectionMode && hasFilteredContracts && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3">
-          <label className="inline-flex items-center gap-2 text-sm text-zinc-300">
-            <input
-              type="checkbox"
-              checked={allFilteredSelected}
-              onChange={toggleSelectAll}
-              className="h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-indigo-600 focus:ring-indigo-500"
-            />
-            Select all ({filtered.length})
-          </label>
-
+      {selectionMode && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-3">
           <div className="flex items-center gap-3">
-            <span className="text-sm text-zinc-400">{selectedIds.length} selected</span>
             <button
               type="button"
-              onClick={() => setConfirmOpen(true)}
-              disabled={selectedIds.length === 0}
-              className="inline-flex items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={toggleSelectAll}
+              className="text-sm font-medium text-indigo-400 hover:text-indigo-300"
             >
-              Delete selected
+              {allFilteredSelected ? 'Deselect all' : 'Select all'}
             </button>
+            <span className="text-sm text-zinc-400">{selectedIds.length} selected</span>
           </div>
+          <button
+            type="button"
+            onClick={() => setConfirmOpen(true)}
+            disabled={selectedIds.length === 0}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Delete selected
+          </button>
         </div>
       )}
 
@@ -365,12 +327,11 @@ export default function ContractsPage() {
             const contracts = grouped[network]
             if (contracts.length === 0) return null
             return (
-              <section key={network} className="space-y-3">
+              <div key={network} className="space-y-3">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
                   {NETWORK_LABELS[network]}
-                  <span className="ml-2 text-zinc-600">{contracts.length}</span>
                 </h2>
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {contracts.map((contract) => (
                     <ContractCard
                       key={contract.id}
@@ -382,12 +343,12 @@ export default function ContractsPage() {
                     />
                   ))}
                 </div>
-              </section>
+              </div>
             )
           })}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {paginated.map((contract) => (
             <ContractCard
               key={contract.id}
@@ -405,9 +366,9 @@ export default function ContractsPage() {
         <div className="flex items-center justify-center gap-2">
           <button
             type="button"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
             disabled={page === 1}
-            className="rounded-lg bg-zinc-800 px-3 py-1.5 text-sm font-medium text-zinc-200 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Previous
           </button>
@@ -416,9 +377,9 @@ export default function ContractsPage() {
           </span>
           <button
             type="button"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
             disabled={page === totalPages}
-            className="rounded-lg bg-zinc-800 px-3 py-1.5 text-sm font-medium text-zinc-200 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Next
           </button>
@@ -426,31 +387,15 @@ export default function ContractsPage() {
       )}
 
       {confirmOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="bulk-delete-title"
-        >
-          <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl">
-            <h2 id="bulk-delete-title" className="text-lg font-semibold text-zinc-100">
-              Delete {selectedContracts.length} contract{selectedContracts.length === 1 ? '' : 's'}?
-            </h2>
-            <p className="mt-2 text-sm text-zinc-400">
-              This will permanently delete the selected contracts and{' '}
-              <span className="font-medium text-zinc-200">{selectedAlertCount}</span>{' '}
-              alert record{selectedAlertCount === 1 ? '' : 's'}. This action cannot be undone.
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6 space-y-4">
+            <h2 className="text-lg font-semibold text-zinc-100">Delete contracts</h2>
+            <p className="text-sm text-zinc-400">
+              Delete {selectedContracts.length} contract
+              {selectedContracts.length === 1 ? '' : 's'} and {selectedAlertCount} alert
+              {selectedAlertCount === 1 ? '' : 's'}? This cannot be undone.
             </p>
-
-            <ul className="mt-4 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-sm text-zinc-300">
-              {selectedContracts.map((contract) => (
-                <li key={contract.id} className="truncate">
-                  {contract.label}
-                </li>
-              ))}
-            </ul>
-
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setConfirmOpen(false)}

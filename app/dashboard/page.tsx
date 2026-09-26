@@ -7,6 +7,7 @@ import { getTodayAlertCount, getAlerts, getNetworkDistribution } from '@/lib/sto
 import ContractCard from '@/components/ContractCard'
 import EmptyState from '@/components/EmptyState'
 import NetworkBadge from '@/components/NetworkBadge'
+import DashboardSkeleton from '@/components/DashboardSkeleton'
 import { Network, Alert } from '@/types'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -135,7 +136,7 @@ export default function DashboardPage() {
     return alerts[0]?.timestamp
   }
 
-  if (!mounted) return null
+  if (!mounted) return <DashboardSkeleton />
 
   return (
     <div className="space-y-8">
