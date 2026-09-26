@@ -122,7 +122,10 @@ export default function NewContractPage() {
       created_at: Date.now(),
       updated_at: Date.now(),
     }
-    saveContract(contract)
+    if (!saveContract(contract)) {
+      setToast({ message: 'Could not save contract: browser storage is full or unavailable.', type: 'error' })
+      return
+    }
     try {
       sessionStorage.setItem('txwatch_last_created_contract', contract.id)
     } catch {
