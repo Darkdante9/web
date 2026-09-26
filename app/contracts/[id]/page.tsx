@@ -12,6 +12,9 @@ import AlertRuleBadge from '@/components/AlertRuleBadge'
 import WebhookLog from '@/components/WebhookLog'
 import RuleBuilder from '@/components/RuleBuilder'
 import CopyButton from '@/components/CopyButton'
+import NotificationToggle from '@/components/NotificationToggle'
+import { notifyNewAlerts } from '@/lib/notifications'
+import { useAlertSync } from '@/hooks/useAlertSync'
 
 export default function ContractDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -31,6 +34,11 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   const [editedLabel, setEditedLabel] = useState('')
   const [editedWebhookUrl, setEditedWebhookUrl] = useState('')
   const [metadataError, setMetadataError] = useState<string | null>(null)
+
+  const sync = useAlertSync(contract?.contract_id, contract?.network, (fresh) => {
+    setAlerts(getAlerts(contract?.contract_id ?? params.id))
+    notifyNewAlerts(fresh, contract?.label ?? params.id, `/contracts/${params.id}`)
+  })
 
   useEffect(() => {
     const c = getContract(params.id)
@@ -256,6 +264,15 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <p className="text-xs text-zinc-500 mb-1">{alerts.length === 0 ? 'Total Alerts' : 'Last Alert'}</p>
+          {sync.enabled && <NotificationToggle />}
+          {sync.enabled && (
+            <p className="text-xs text-zinc-500 mb-1" data-testid="sync-status">
+              <span className={sync.live ? 'text-green-400' : 'text-zinc-500'}>
+                {sync.live ? 'Live' : 'Offline'}
+              </span>
+              {sync.lastSync ? ` · synced ${new Date(sync.lastSync).toLocaleTimeString()}` : ''}
+            </p>
+          )}
           {alerts.length === 0 ? (
             <p className="text-sm text-zinc-300">No alerts yet</p>
           ) : (

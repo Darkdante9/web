@@ -12,6 +12,38 @@ export const SOROBAN_RPC_URLS: Record<Network, string> = {
   futurenet: 'https://rpc-futurenet.stellar.org',
 }
 
+function clean(v: string | undefined): string | undefined {
+  const t = v?.trim().replace(/\/+$/, '')
+  return t ? t : undefined
+}
+
+// NEXT_PUBLIC_* vars are inlined by Next.js only for literal `process.env.NAME`
+// accesses, so each variable is spelled out (no dynamic lookup).
+/**
+ * Horizon URL for a network. Precedence: NEXT_PUBLIC_HORIZON_URL_<NETWORK>,
+ * then NEXT_PUBLIC_HORIZON_URL (applies to every network), then the default.
+ */
+export function horizonUrl(network: Network): string {
+  const perNetwork = {
+    mainnet: process.env.NEXT_PUBLIC_HORIZON_URL_MAINNET,
+    testnet: process.env.NEXT_PUBLIC_HORIZON_URL_TESTNET,
+    futurenet: process.env.NEXT_PUBLIC_HORIZON_URL_FUTURENET,
+  }[network]
+  return clean(perNetwork) ?? clean(process.env.NEXT_PUBLIC_HORIZON_URL) ?? HORIZON_URLS[network]
+}
+
+/** Soroban RPC URL for a network; same precedence as horizonUrl. */
+export function sorobanRpcUrl(network: Network): string {
+  const perNetwork = {
+    mainnet: process.env.NEXT_PUBLIC_SOROBAN_RPC_URL_MAINNET,
+    testnet: process.env.NEXT_PUBLIC_SOROBAN_RPC_URL_TESTNET,
+    futurenet: process.env.NEXT_PUBLIC_SOROBAN_RPC_URL_FUTURENET,
+  }[network]
+  return (
+    clean(perNetwork) ?? clean(process.env.NEXT_PUBLIC_SOROBAN_RPC_URL) ?? SOROBAN_RPC_URLS[network]
+  )
+}
+
 export const STELLAR_EXPERT_BASE = 'https://stellar.expert/explorer'
 
 export function explorerTxUrl(network: Network, txHash: string): string {
