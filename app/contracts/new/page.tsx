@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertRule, Network, WatchedContract } from '@/types'
 import { isValidContractId, isValidUrl } from '@/lib/stellar'
-import { saveContract, getContracts } from '@/lib/storage'
+import { addContract, getContracts } from '@/lib/storage'
 import { sendTestWebhook } from '@/lib/api'
 import { useFreighterConnection } from '@/lib/useFreighterConnection'
 import RuleBuilder from '@/components/RuleBuilder'
@@ -119,7 +119,7 @@ export default function NewContractPage() {
       created_at: Date.now(),
       updated_at: Date.now(),
     }
-    saveContract(contract)
+    addContract(contract)
     try {
       sessionStorage.setItem('txwatch_last_created_contract', contract.id)
     } catch {

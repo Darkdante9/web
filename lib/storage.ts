@@ -132,6 +132,20 @@ export function getContractByIdAndNetwork(
   return getContracts().find((c) => c.contract_id === contractId && c.network === network)
 }
 
+export class DuplicateContractError extends Error {
+  constructor(contractId: string, network: string) {
+    super(`Contract ${contractId} is already registered on ${network}`)
+    this.name = 'DuplicateContractError'
+  }
+}
+
+export function addContract(contract: WatchedContract) {
+  if (getContractByIdAndNetwork(contract.contract_id, contract.network)) {
+    throw new DuplicateContractError(contract.contract_id, contract.network)
+  }
+  saveContract(contract)
+}
+
 export function saveContract(contract: WatchedContract) {
   const contracts = getContracts().filter((c) => c.id !== contract.id)
   const updated = { ...contract, updated_at: Date.now() }

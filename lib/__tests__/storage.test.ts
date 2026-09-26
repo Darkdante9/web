@@ -7,6 +7,8 @@ import {
   getAlerts,
   deleteAlert,
   seedMockAlerts,
+  addContract,
+  DuplicateContractError,
 } from '../storage';
 
 const localStorageMock = (() => {
@@ -177,5 +179,31 @@ describe('seedMockAlerts', () => {
   it('respects the per-contract alert cap', () => {
     seedMockAlerts('c1', 'testnet', 600);
     expect(getAlerts('c1')).toHaveLength(500);
+  });
+});
+
+describe('addContract', () => {
+  it('adds a new contract', () => {
+    addContract(contract1);
+    expect(getContracts()).toHaveLength(1);
+  });
+
+  it('rejects the same contract_id on the same network with a typed error', () => {
+    addContract(contract1);
+    expect(() => addContract({ ...contract1, id: 'other' })).toThrow(DuplicateContractError);
+    expect(getContracts()).toHaveLength(1);
+  });
+
+  it('allows the same contract_id on a different network', () => {
+    addContract(contract1);
+    addContract({ ...contract1, id: 'other', network: 'testnet' });
+    expect(getContracts()).toHaveLength(2);
+  });
+
+  it('leaves saveContract usable for updates by id', () => {
+    addContract(contract1);
+    saveContract({ ...contract1, label: 'Renamed' });
+    expect(getContracts()).toHaveLength(1);
+    expect(getContracts()[0].label).toBe('Renamed');
   });
 });
