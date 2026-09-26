@@ -3,6 +3,7 @@ import {
   exportContractsAsJson,
   parseContractSnapshot,
 } from '../exportStorage';
+import { CONTRACTS_KEY, saveContract } from '../storage';
 
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -15,7 +16,7 @@ const localStorageMock = (() => {
 })();
 Object.defineProperty(global, 'localStorage', { value: localStorageMock });
 
-const KEY = 'txwatch:contracts';
+const KEY = CONTRACTS_KEY;
 const sample = [
   { id: 'c1', address: 'GABC', label: 'Alpha', network: 'mainnet' },
   { id: 'c2', address: 'GDEF', label: 'Beta',  network: 'testnet' },
@@ -86,5 +87,23 @@ describe('parseContractSnapshot', () => {
   it('throws when contracts field is missing', () => {
     const bad = JSON.stringify({ version: 1 });
     expect(() => parseContractSnapshot(bad)).toThrow('Invalid snapshot format');
+  });
+});
+
+describe('buildContractSnapshot with default key', () => {
+  it('exports contracts written by saveContract', () => {
+    saveContract({
+      id: 'c1',
+      label: 'Alpha',
+      contract_id: 'CDSO4GGZH7KBUQYKOIQDCMCFSRYEPOVDUX7Z4IB5TWNTLT2GDRKDQOYR',
+      network: 'mainnet',
+      rules: [],
+      webhook_url: 'https://hooks.example.com/alpha',
+      created_at: 1,
+      updated_at: 1,
+    });
+    const snapshot = buildContractSnapshot();
+    expect(snapshot.count).toBe(1);
+    expect(snapshot.contracts[0].id).toBe('c1');
   });
 });

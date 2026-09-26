@@ -1,6 +1,6 @@
 import { WatchedContract, AlertPayload, Network } from '@/types'
 
-const CONTRACTS_KEY = 'txwatch_contracts'
+export const CONTRACTS_KEY = 'txwatch_contracts'
 const ALERTS_KEY = 'txwatch_alerts'
 const STORAGE_VERSION_KEY = 'txwatch_storage_version'
 const CURRENT_STORAGE_VERSION = 1
