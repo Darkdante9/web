@@ -6,6 +6,7 @@ import {
   saveAlert,
   getAlerts,
   deleteAlert,
+  seedMockAlerts,
 } from '../storage';
 
 const localStorageMock = (() => {
@@ -158,5 +159,23 @@ describe('deleteAlert', () => {
     const alerts = getAlerts('c1');
     expect(alerts).toHaveLength(1);
     expect((alerts[0] as { id?: string }).id).toBe('a2');
+  });
+});
+
+describe('seedMockAlerts', () => {
+  it('uses the network Horizon host, 64-hex hashes, and chronological order', () => {
+    seedMockAlerts('c1', 'futurenet', 3);
+    const alerts = getAlerts('c1');
+    expect(alerts).toHaveLength(3);
+    for (const a of alerts) {
+      expect(a.transaction_hash).toMatch(/^[0-9a-f]{64}$/);
+      expect(a.horizon_link.startsWith('https://horizon-futurenet.stellar.org/')).toBe(true);
+    }
+    expect(alerts[0].timestamp).toBeLessThan(alerts[2].timestamp);
+  });
+
+  it('respects the per-contract alert cap', () => {
+    seedMockAlerts('c1', 'testnet', 600);
+    expect(getAlerts('c1')).toHaveLength(500);
   });
 });

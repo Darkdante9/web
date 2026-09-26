@@ -1,4 +1,5 @@
 import { WatchedContract, AlertPayload, Network } from '@/types'
+import { HORIZON_URLS } from './stellar'
 
 export const CONTRACTS_KEY = 'txwatch_contracts'
 const ALERTS_KEY = 'txwatch_alerts'
@@ -166,27 +167,21 @@ export function seedMockAlerts(
   network: Network,
   count = 5
 ): void {
-  const storage = getStorage()
-  if (!storage) return
-
   const now = Date.now()
-  const alerts = Array.from({ length: count }, (_, index) => {
+  for (let index = count - 1; index >= 0; index--) {
     const sequence = index + 1
-    const hash = `MOCK-${contractId.slice(0, 10)}-${sequence.toString().padStart(2, '0')}`
-    const horizonHost = network === 'mainnet' ? 'horizon.stellar.org' : 'horizon-testnet.stellar.org'
-    return {
+    const hash = Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+    addAlert({
       label: `Mock Alert ${sequence}`,
       contract_id: contractId,
       network,
       rule_triggered: 'AnyTransaction',
-      transaction_hash: `${hash}-${Math.random().toString(16).slice(2, 18)}`,
+      transaction_hash: hash,
       amount: 10 + index * 5,
       timestamp: now - index * 15 * 60 * 1000,
-      horizon_link: `https://${horizonHost}/transactions/${hash}`,
-    }
-  })
-
-  save(ALERTS_KEY, [...alerts, ...load<AlertPayload>(ALERTS_KEY)])
+      horizon_link: `${HORIZON_URLS[network]}/transactions/${hash}`,
+    })
+  }
 }
 
 export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: string; id?: string })) {

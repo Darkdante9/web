@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule } from '@/types'
-import { getContract, deleteContract, getAlerts, saveContract } from '@/lib/storage'
+import { getContract, deleteContract, getAlerts, saveContract, seedMockAlerts } from '@/lib/storage'
 import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
 import { formatDate, formatRuleSummary } from '@/lib/format'
 import { useAnalytics } from '@/lib/useAnalytics'
@@ -207,6 +207,17 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
           >
             Edit Rules
           </button>
+          {process.env.NODE_ENV !== 'production' && (
+            <button
+              onClick={() => {
+                seedMockAlerts(params.id, contract.network)
+                setAlerts(getAlerts(params.id))
+              }}
+              className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+            >
+              Seed mock alerts
+            </button>
+          )}
           <button
             onClick={() => setShowDelete(true)}
             className="px-3 py-1.5 rounded-lg border border-red-800 hover:border-red-600 text-sm text-red-400 hover:text-red-300 transition-colors"
