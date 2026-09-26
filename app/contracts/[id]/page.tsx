@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule } from '@/types'
-import { getContract, deleteContract, getAlerts, saveContract } from '@/lib/storage'
+import { getContract, getAlerts } from '@/lib/storage'
+import { syncSaveContract, syncDeleteContract } from '@/lib/contractSync'
 import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
 import { formatDate, formatRuleSummary } from '@/lib/format'
 import { useAnalytics } from '@/lib/useAnalytics'
@@ -45,7 +46,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   }, [params.id, router])
 
   function handleDelete() {
-    deleteContract(params.id)
+    void syncDeleteContract(params.id)
     router.push('/contracts')
   }
 
@@ -59,7 +60,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   function saveRules() {
     if (editedRules.length === 0) { setRulesError('Add at least one rule'); return }
     const updated = { ...contract!, rules: editedRules }
-    saveContract(updated)
+    void syncSaveContract(updated, false)
     setContract(updated)
     setShowEditRules(false)
     trackEvent('rule_edit_saved', { contractId: params.id, ruleCount: editedRules.length })
@@ -122,7 +123,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
       label: trimmedLabel,
       webhook_url: trimmedWebhookUrl
     }
-    saveContract(updated)
+    void syncSaveContract(updated, false)
     setContract(updated)
     setShowEditMetadata(false)
     trackEvent('metadata_edit_saved', { contractId: params.id })
