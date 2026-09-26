@@ -4,8 +4,10 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertRule, Network, WatchedContract } from '@/types'
 import { isValidContractId, isValidUrl } from '@/lib/stellar'
-import { saveContract, getContracts } from '@/lib/storage'
+import { addContract, getContracts } from '@/lib/storage'
 import { sendTestWebhook } from '@/lib/api'
+import { generateWebhookSecret } from '@/lib/webhookSignature'
+import CopyButton from '@/components/CopyButton'
 import { useFreighterConnection } from '@/lib/useFreighterConnection'
 import RuleBuilder from '@/components/RuleBuilder'
 import FreighterConnect from '@/components/FreighterConnect'
@@ -28,6 +30,7 @@ export default function NewContractPage() {
   const [contractId, setContractId] = useState('')
   const [network, setNetwork] = useState<Network>('testnet')
   const [webhookUrl, setWebhookUrl] = useState('')
+  const [webhookSecret, setWebhookSecret] = useState('')
   const [rules, setRules] = useState<AlertRule[]>([])
   const [errors, setErrors] = useState<FormErrors>({})
   const [saving, setSaving] = useState(false)
@@ -119,7 +122,11 @@ export default function NewContractPage() {
       created_at: Date.now(),
       updated_at: Date.now(),
     }
-    saveContract(contract)
+    addContract(contract)
+    if (!saveContract(contract)) {
+      setToast({ message: 'Could not save contract: browser storage is full or unavailable.', type: 'error' })
+      return
+    }
     try {
       sessionStorage.setItem('txwatch_last_created_contract', contract.id)
     } catch {
@@ -149,7 +156,7 @@ export default function NewContractPage() {
     setTestError(null)
     setTestStatusCode(null)
     try {
-      const { status, ok } = await sendTestWebhook(trimmedWebhookUrl, trimmedContractId, network, controller.signal)
+      const { status, ok } = await sendTestWebhook(trimmedWebhookUrl, trimmedContractId, network, controller.signal, webhookSecret || undefined)
       setTestStatusCode(status)
       if (ok) {
         setTestStatus('ok')
@@ -251,6 +258,22 @@ export default function NewContractPage() {
             </button>
           </div>
           <p className="mt-1.5 text-xs text-zinc-400">HTTP and HTTPS are supported. Example: <span className="font-mono">https://api.example.com/alerts</span></p>
+          <div className="mt-2 flex items-center gap-2 text-xs text-zinc-400">
+            <button
+              type="button"
+              onClick={() => setWebhookSecret(generateWebhookSecret())}
+              className="px-2 py-1 rounded border border-zinc-700 hover:border-zinc-500 text-zinc-300"
+            >
+              {webhookSecret ? 'Rotate signing secret' : 'Generate signing secret'}
+            </button>
+            {webhookSecret && (
+              <>
+                <span className="font-mono break-all text-zinc-300">{webhookSecret}</span>
+                <CopyButton text={webhookSecret} />
+              </>
+            )}
+          </div>
+          {webhookSecret && <p className="mt-1 text-xs text-amber-400">Copy this secret now — it is shown only once. Requests are signed in the X-TxWatch-Signature header.</p>}
           {errors.webhook_url && <p className="mt-1 text-xs text-red-400">{errors.webhook_url}</p>}
           {testStatus === 'error' && testError && <p className="mt-1 text-xs text-red-400">{testError}</p>}
           {testStatus === 'ok' && <p className="mt-1 text-xs text-emerald-400">Test payload delivered — {testStatusCode} received</p>}
