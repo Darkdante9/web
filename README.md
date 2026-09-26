@@ -249,6 +249,29 @@ When a rule fires, the core engine POSTs this JSON to the registered webhook URL
 
 The `Test` button on the Add Contract form sends a mock payload to your endpoint so you can verify delivery before going live.
 
+### Verifying webhook signatures
+
+Requests carry an `X-TxWatch-Signature: sha256=<hex>` header: the HMAC-SHA256 of the raw request body, keyed with your signing secret (generate one on the Add Contract form; it is shown once). Verify against the raw body, not re-serialised JSON:
+
+```js
+import crypto from 'node:crypto'
+
+function verify(rawBody, header, secret) {
+  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
+  const a = Buffer.from(expected)
+  const b = Buffer.from(header ?? '')
+  return a.length === b.length && crypto.timingSafeEqual(a, b)
+}
+```
+
+```python
+import hmac, hashlib
+
+def verify(raw_body: bytes, header: str, secret: str) -> bool:
+    expected = "sha256=" + hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, header or "")
+```
+
 ## CI
 
 Every push and pull request to `main` runs the full CI pipeline via GitHub Actions:
