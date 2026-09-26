@@ -160,3 +160,26 @@ describe('deleteAlert', () => {
     expect((alerts[0] as { id?: string }).id).toBe('a2');
   });
 });
+
+describe('alert retention pruning', () => {
+  const DAY = 24 * 60 * 60 * 1000
+  const alert = (age: number) => ({
+    label: 'a', contract_id: 'CX', network: 'testnet', rule_triggered: 'AnyTransaction',
+    transaction_hash: `h${age}`, timestamp: Date.now() - age * DAY, horizon_link: '',
+  })
+
+  it('prunes on addAlert without any contract save', async () => {
+    const s = await import('../storage')
+    localStorage.setItem('txwatch_alerts', JSON.stringify([alert(100)]))
+    s.addAlert(alert(1))
+    expect(s.getAlerts('CX')).toHaveLength(1)
+  })
+
+  it('honours configurable retention', async () => {
+    const s = await import('../storage')
+    localStorage.setItem('txwatch_alerts', JSON.stringify([alert(10), alert(1)]))
+    s.setRetentionDays(5)
+    expect(s.getRetentionDays()).toBe(5)
+    expect(s.getAlerts('CX')).toHaveLength(1)
+  })
+})
