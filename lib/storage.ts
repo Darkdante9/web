@@ -5,6 +5,7 @@ const CONTRACTS_KEY = 'txwatch_contracts'
 const ALERTS_KEY = 'txwatch_alerts'
 const STORAGE_VERSION_KEY = 'txwatch_storage_version'
 const CURRENT_STORAGE_VERSION = 1
+const STORAGE_EVENT = 'txwatch:storage'
 
 function getStorage(): Storage | undefined {
   if (typeof window !== 'undefined') return window.localStorage
@@ -89,7 +90,18 @@ function writeItem(storage: Storage, key: string, value: string): boolean {
   }
 }
 
+function notifyChange(key: string) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(STORAGE_EVENT, { detail: { key } }))
+}
+
 function save<T>(key: string, data: T[]): boolean {
+  const ok = saveInternal(key, data)
+  if (ok) notifyChange(key)
+  return ok
+}
+
+function saveInternal<T>(key: string, data: T[]): boolean {
   const storage = getStorage()
   if (!storage) return false
 
@@ -249,8 +261,17 @@ export function onAlertsChange(callback: () => void): () => void {
       callback()
     }
   }
+  const local = (e: Event) => {
+    if ((e as CustomEvent<{ key: string }>).detail?.key === ALERTS_KEY) {
+      callback()
+    }
+  }
   window.addEventListener('storage', handler)
-  return () => window.removeEventListener('storage', handler)
+  window.addEventListener(STORAGE_EVENT, local)
+  return () => {
+    window.removeEventListener('storage', handler)
+    window.removeEventListener(STORAGE_EVENT, local)
+  }
 }
 
 export function onContractsChange(callback: () => void): () => void {
@@ -259,6 +280,15 @@ export function onContractsChange(callback: () => void): () => void {
       callback()
     }
   }
+  const local = (e: Event) => {
+    if ((e as CustomEvent<{ key: string }>).detail?.key === CONTRACTS_KEY) {
+      callback()
+    }
+  }
   window.addEventListener('storage', handler)
-  return () => window.removeEventListener('storage', handler)
+  window.addEventListener(STORAGE_EVENT, local)
+  return () => {
+    window.removeEventListener('storage', handler)
+    window.removeEventListener(STORAGE_EVENT, local)
+  }
 }
