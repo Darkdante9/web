@@ -110,3 +110,26 @@ describe('formatAmount USDC / display precision', () => {
     expect(formatAmount('150.5', 'USDC', false, { displayDecimals: 2 })).toBe('150.50 USDC');
   });
 });
+
+describe('formatAmountCompact unit boundaries', () => {
+  it('rolls 999999 over to M', () => {
+    expect(formatAmountCompact(999999, 'XLM')).toBe('1.00M XLM');
+  });
+
+  it('rolls 999.995 over to K', () => {
+    expect(formatAmountCompact(999.995, 'XLM')).toBe('1.00K XLM');
+  });
+
+  it('keeps 999.994 below K', () => {
+    expect(formatAmountCompact(999.994, 'XLM')).toBe('999.99 XLM');
+  });
+
+  it('keeps 999994 in K', () => {
+    expect(formatAmountCompact(999994, 'XLM')).toBe('999.99K XLM');
+  });
+
+  it('handles negatives and bigint stroops', () => {
+    expect(formatAmountCompact(-999999, 'XLM')).toBe('-1.00M XLM');
+    expect(formatAmountCompact(9999999999999n, 'XLM', true)).toBe('1.00M XLM');
+  });
+});

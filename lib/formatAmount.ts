@@ -110,12 +110,10 @@ export function formatAmountCompact(
   const value = toValue(raw, stroops, options.decimals ?? DEFAULT_DECIMALS);
   if (!value) return `— ${asset}`;
   const label = asset === 'native' ? 'XLM' : asset.toUpperCase();
+  // Pick the unit by the *rounded* value: 999.995 already prints as 1000.00, so it moves up a unit.
   const abs = value.units < 0n ? -value.units : value.units;
-  if (abs >= 1_000_000n * pow10(value.scale)) {
-    return `${renderFixed({ ...value, scale: value.scale + 6 }, 2)}M ${label}`;
-  }
-  if (abs >= 1_000n * pow10(value.scale)) {
-    return `${renderFixed({ ...value, scale: value.scale + 3 }, 2)}K ${label}`;
-  }
+  const s = pow10(value.scale);
+  if (abs * 1000n >= 999_995_000n * s) return `${renderFixed({ ...value, scale: value.scale + 6 }, 2)}M ${label}`;
+  if (abs * 1000n >= 999_995n * s)     return `${renderFixed({ ...value, scale: value.scale + 3 }, 2)}K ${label}`;
   return `${renderFixed(value, 2)} ${label}`;
 }
