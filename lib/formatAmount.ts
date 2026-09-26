@@ -5,11 +5,14 @@ export type AmountInput = string | number | bigint;
 export interface AmountOptions {
   /** Native precision of the token (from token metadata). Default 7. */
   decimals?: number;
+  /** Digits shown after the point. Defaults to the asset's display precision (7). */
+  displayDecimals?: number;
 }
 
+// Display precision per asset. Stellar classic assets (incl. USDC) have 7 decimals.
 const ASSET_DECIMALS: Record<string, number> = {
   XLM:    7,
-  USDC:   2,
+  USDC:   7,
   native: 7,
 };
 
@@ -79,7 +82,7 @@ export function formatAmount(
 ): string {
   const value = toValue(raw, stroops, options.decimals ?? DEFAULT_DECIMALS);
   if (!value) return `— ${asset}`;
-  const decimals = ASSET_DECIMALS[asset.toUpperCase()] ?? DEFAULT_DECIMALS;
+  const decimals = options.displayDecimals ?? ASSET_DECIMALS[asset.toUpperCase()] ?? DEFAULT_DECIMALS;
   const label    = asset === 'native' ? 'XLM' : asset.toUpperCase();
   return `${renderFixed(value, decimals)} ${label}`;
 }

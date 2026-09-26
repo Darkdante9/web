@@ -10,8 +10,8 @@ describe('formatAmount', () => {
     expect(formatAmount('1', 'XLM')).toBe('1.0000000 XLM');
   });
 
-  it('formats USDC with 2 decimal places', () => {
-    expect(formatAmount('150.5', 'USDC')).toBe('150.50 USDC');
+  it('formats USDC with 7 decimal places', () => {
+    expect(formatAmount('150.5', 'USDC')).toBe('150.5000000 USDC');
   });
 
   it('converts stroops to XLM', () => {
@@ -94,5 +94,19 @@ describe('formatAmount i128 / BigInt-safe', () => {
   it('isZeroAmount accepts bigint', () => {
     expect(isZeroAmount(0n)).toBe(true);
     expect(isZeroAmount(1n)).toBe(false);
+  });
+});
+
+describe('formatAmount USDC / display precision', () => {
+  it('does not truncate small USDC amounts', () => {
+    expect(formatAmount('0.0012345', 'USDC')).toBe('0.0012345 USDC');
+  });
+
+  it('converts USDC stroops consistently', () => {
+    expect(formatAmount('12345', 'USDC', true)).toBe('0.0012345 USDC');
+  });
+
+  it('accepts an explicit display precision', () => {
+    expect(formatAmount('150.5', 'USDC', false, { displayDecimals: 2 })).toBe('150.50 USDC');
   });
 });
