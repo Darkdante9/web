@@ -1,9 +1,12 @@
 import { WatchedContract, AlertPayload, Network } from '@/types'
+import { HORIZON_URLS } from './stellar'
+import { safeParseStorage } from './storageLogger'
 
-const CONTRACTS_KEY = 'txwatch_contracts'
+export const CONTRACTS_KEY = 'txwatch_contracts'
 const ALERTS_KEY = 'txwatch_alerts'
 const STORAGE_VERSION_KEY = 'txwatch_storage_version'
 const CURRENT_STORAGE_VERSION = 1
+const STORAGE_EVENT = 'txwatch:storage'
 
 function getStorage(): Storage | undefined {
   if (typeof window !== 'undefined') return window.localStorage
@@ -13,11 +16,7 @@ function getStorage(): Storage | undefined {
 function load<T>(key: string): T[] {
   const storage = getStorage()
   if (!storage) return []
-  try {
-    return JSON.parse(storage.getItem(key) ?? '[]')
-  } catch {
-    return []
-  }
+  return safeParseStorage<T[]>(key, [])
 }
 
 const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024 // 5MB typical limit
@@ -46,7 +45,7 @@ function getStorageSize(): number {
     if (!key) continue
     const value = storage.getItem(key)
     if (value !== null) {
-      size += value.length + key.length
+      size += (value.length + key.length) * 2 // UTF-16: 2 bytes per code unit
     }
   }
   return size
@@ -59,7 +58,11 @@ export function pruneOldAlerts() {
   const alerts = load<AlertPayload>(ALERTS_KEY)
   const pruned = alerts.filter((a) => a.timestamp >= cutoff)
   if (pruned.length < alerts.length) {
-    storage.setItem(ALERTS_KEY, JSON.stringify(pruned))
+    try {
+      storage.setItem(ALERTS_KEY, JSON.stringify(pruned))
+    } catch {
+      // best effort
+    }
   }
 }
 
@@ -73,9 +76,48 @@ function trimAlertsToCutoff(cutoff: number) {
   }
 }
 
-function save<T>(key: string, data: T[]) {
+function isQuotaError(err: unknown): boolean {
+  const e = err as { name?: string; code?: number } | null
+  return (
+    !!e &&
+    (e.name === 'QuotaExceededError' ||
+      e.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+      e.code === 22 ||
+      e.code === 1014)
+  )
+}
+
+// Writes a value; on quota errors prunes old alerts and retries once.
+function writeItem(storage: Storage, key: string, value: string): boolean {
+  try {
+    storage.setItem(key, value)
+    return true
+  } catch (err) {
+    if (!isQuotaError(err)) return false
+  }
+  pruneOldAlerts()
+  try {
+    storage.setItem(key, value)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function notifyChange(key: string) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(STORAGE_EVENT, { detail: { key } }))
+}
+
+function save<T>(key: string, data: T[]): boolean {
+  const ok = saveInternal(key, data)
+  if (ok) notifyChange(key)
+  return ok
+}
+
+function saveInternal<T>(key: string, data: T[]): boolean {
   const storage = getStorage()
-  if (!storage) return
+  if (!storage) return false
 
   if (key !== ALERTS_KEY) {
     pruneOldAlerts()
@@ -87,17 +129,17 @@ function save<T>(key: string, data: T[]) {
       const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
       data = (data as AlertPayload[]).filter((a) => a.timestamp >= cutoff) as unknown as T[]
     }
-    storage.setItem(key, JSON.stringify(data))
-    return
+    return writeItem(storage, key, JSON.stringify(data))
   }
 
-  storage.setItem(key, JSON.stringify(data))
+  const ok = writeItem(storage, key, JSON.stringify(data))
 
   const size = getStorageSize()
   if (size > STORAGE_QUOTA_BYTES * 0.9) {
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
     trimAlertsToCutoff(cutoff)
   }
+  return ok
 }
 
 function getStorageVersion(): number {
@@ -144,10 +186,25 @@ export function getContractByIdAndNetwork(
   return getContracts().find((c) => c.contract_id === contractId && c.network === network)
 }
 
+export class DuplicateContractError extends Error {
+  constructor(contractId: string, network: string) {
+    super(`Contract ${contractId} is already registered on ${network}`)
+    this.name = 'DuplicateContractError'
+  }
+}
+
+export function addContract(contract: WatchedContract) {
+  if (getContractByIdAndNetwork(contract.contract_id, contract.network)) {
+    throw new DuplicateContractError(contract.contract_id, contract.network)
+  }
+  saveContract(contract)
+}
+
 export function saveContract(contract: WatchedContract) {
+export function saveContract(contract: WatchedContract): boolean {
   const contracts = getContracts().filter((c) => c.id !== contract.id)
   const updated = { ...contract, updated_at: Date.now() }
-  save(CONTRACTS_KEY, [...contracts, updated])
+  return save(CONTRACTS_KEY, [...contracts, updated])
 }
 
 export function deleteContract(id: string) {
@@ -179,27 +236,21 @@ export function seedMockAlerts(
   network: Network,
   count = 5
 ): void {
-  const storage = getStorage()
-  if (!storage) return
-
   const now = Date.now()
-  const alerts = Array.from({ length: count }, (_, index) => {
+  for (let index = count - 1; index >= 0; index--) {
     const sequence = index + 1
-    const hash = `MOCK-${contractId.slice(0, 10)}-${sequence.toString().padStart(2, '0')}`
-    const horizonHost = network === 'mainnet' ? 'horizon.stellar.org' : 'horizon-testnet.stellar.org'
-    return {
+    const hash = Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+    addAlert({
       label: `Mock Alert ${sequence}`,
       contract_id: contractId,
       network,
       rule_triggered: 'AnyTransaction',
-      transaction_hash: `${hash}-${Math.random().toString(16).slice(2, 18)}`,
+      transaction_hash: hash,
       amount: 10 + index * 5,
       timestamp: now - index * 15 * 60 * 1000,
-      horizon_link: `https://${horizonHost}/transactions/${hash}`,
-    }
-  })
-
-  save(ALERTS_KEY, [...alerts, ...load<AlertPayload>(ALERTS_KEY)])
+      horizon_link: `${HORIZON_URLS[network]}/transactions/${hash}`,
+    })
+  }
 }
 
 export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: string; id?: string })) {
@@ -216,13 +267,6 @@ export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: st
   pruneOldAlerts()
 }
 
-export function deleteAlertsByContractId(contractId: string) {
-  const alerts = load<AlertPayload>(ALERTS_KEY)
-  save(ALERTS_KEY, alerts.filter((a) => a.contract_id !== contractId))
-}
-
-export const saveAlert = addAlert
-
 export function getTodayAlertCount(): number {
   const start = new Date().setHours(0, 0, 0, 0)
   return load<AlertPayload>(ALERTS_KEY).filter((a) => a.timestamp >= start).length
@@ -234,8 +278,17 @@ export function onAlertsChange(callback: () => void): () => void {
       callback()
     }
   }
+  const local = (e: Event) => {
+    if ((e as CustomEvent<{ key: string }>).detail?.key === ALERTS_KEY) {
+      callback()
+    }
+  }
   window.addEventListener('storage', handler)
-  return () => window.removeEventListener('storage', handler)
+  window.addEventListener(STORAGE_EVENT, local)
+  return () => {
+    window.removeEventListener('storage', handler)
+    window.removeEventListener(STORAGE_EVENT, local)
+  }
 }
 
 export function onContractsChange(callback: () => void): () => void {
@@ -244,6 +297,15 @@ export function onContractsChange(callback: () => void): () => void {
       callback()
     }
   }
+  const local = (e: Event) => {
+    if ((e as CustomEvent<{ key: string }>).detail?.key === CONTRACTS_KEY) {
+      callback()
+    }
+  }
   window.addEventListener('storage', handler)
-  return () => window.removeEventListener('storage', handler)
+  window.addEventListener(STORAGE_EVENT, local)
+  return () => {
+    window.removeEventListener('storage', handler)
+    window.removeEventListener(STORAGE_EVENT, local)
+  }
 }

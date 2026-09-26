@@ -3,10 +3,14 @@ import {
   saveContract,
   deleteContract,
   getContracts,
-  saveAlert,
+  addAlert,
   getAlerts,
   deleteAlert,
+  seedMockAlerts,
+  addContract,
+  DuplicateContractError,
 } from '../storage';
+import { onStorageError, clearStorageErrorHandlers } from '../storageLogger';
 
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -136,11 +140,11 @@ describe('duplicate contract handling', () => {
   });
 });
 
-describe('saveAlert / getAlerts — insertion order', () => {
+describe('addAlert / getAlerts — insertion order', () => {
   it('returns alerts in insertion order', () => {
-    saveAlert(alert1);
-    saveAlert(alert2);
-    saveAlert(alert3);
+    addAlert(alert1);
+    addAlert(alert2);
+    addAlert(alert3);
     const alerts = getAlerts('c1');
     expect(alerts.map((a) => (a as { id?: string }).id)).toEqual(['a1', 'a2', 'a3']);
   });
@@ -152,8 +156,8 @@ describe('saveAlert / getAlerts — insertion order', () => {
 
 describe('deleteAlert', () => {
   it('removes only the specified alert', () => {
-    saveAlert(alert1);
-    saveAlert(alert2);
+    addAlert(alert1);
+    addAlert(alert2);
     deleteAlert('a1');
     const alerts = getAlerts('c1');
     expect(alerts).toHaveLength(1);
@@ -183,3 +187,84 @@ describe('alert retention pruning', () => {
     expect(s.getAlerts('CX')).toHaveLength(1)
   })
 })
+describe('seedMockAlerts', () => {
+  it('uses the network Horizon host, 64-hex hashes, and chronological order', () => {
+    seedMockAlerts('c1', 'futurenet', 3);
+    const alerts = getAlerts('c1');
+    expect(alerts).toHaveLength(3);
+    for (const a of alerts) {
+      expect(a.transaction_hash).toMatch(/^[0-9a-f]{64}$/);
+      expect(a.horizon_link.startsWith('https://horizon-futurenet.stellar.org/')).toBe(true);
+    }
+    expect(alerts[0].timestamp).toBeLessThan(alerts[2].timestamp);
+  });
+
+  it('respects the per-contract alert cap', () => {
+    seedMockAlerts('c1', 'testnet', 600);
+    expect(getAlerts('c1')).toHaveLength(500);
+  });
+});
+
+describe('addContract', () => {
+  it('adds a new contract', () => {
+    addContract(contract1);
+    expect(getContracts()).toHaveLength(1);
+  });
+
+  it('rejects the same contract_id on the same network with a typed error', () => {
+    addContract(contract1);
+    expect(() => addContract({ ...contract1, id: 'other' })).toThrow(DuplicateContractError);
+    expect(getContracts()).toHaveLength(1);
+  });
+
+  it('allows the same contract_id on a different network', () => {
+    addContract(contract1);
+    addContract({ ...contract1, id: 'other', network: 'testnet' });
+    expect(getContracts()).toHaveLength(2);
+  });
+
+  it('leaves saveContract usable for updates by id', () => {
+    addContract(contract1);
+    saveContract({ ...contract1, label: 'Renamed' });
+    expect(getContracts()).toHaveLength(1);
+    expect(getContracts()[0].label).toBe('Renamed');
+describe('corrupted storage', () => {
+  it('triggers the registered storage error handler and returns []', () => {
+    const keys: string[] = [];
+    onStorageError((ctx) => keys.push(ctx.key));
+    localStorage.setItem('txwatch_contracts', '{broken');
+    expect(getContracts()).toEqual([]);
+    expect(keys).toEqual(['txwatch_contracts']);
+    clearStorageErrorHandlers();
+  });
+});
+
+describe('quota handling', () => {
+  const realSet = localStorageMock.setItem;
+  afterEach(() => { localStorageMock.setItem = realSet; });
+
+  function quotaError() {
+    const e = new Error('full');
+    e.name = 'QuotaExceededError';
+    return e;
+  }
+
+  it('returns false instead of throwing when storage always fails', () => {
+    localStorageMock.setItem = () => { throw quotaError(); };
+    expect(saveContract(contract1)).toBe(false);
+  });
+
+  it('retries once after quota error and returns true on success', () => {
+    let calls = 0;
+    localStorageMock.setItem = (k: string, v: string) => {
+      if (calls++ === 0) throw quotaError();
+      realSet(k, v);
+    };
+    expect(saveContract(contract1)).toBe(true);
+    expect(getContracts()).toHaveLength(1);
+  });
+
+  it('returns true on normal save', () => {
+    expect(saveContract(contract1)).toBe(true);
+  });
+});

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule } from '@/types'
 import { getContract, getAlerts } from '@/lib/storage'
 import { syncSaveContract, syncDeleteContract } from '@/lib/contractSync'
+import { getContract, deleteContract, getAlerts, saveContract, seedMockAlerts } from '@/lib/storage'
 import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
 import { formatDate, formatRuleSummary } from '@/lib/format'
 import { useAnalytics } from '@/lib/useAnalytics'
@@ -13,6 +14,9 @@ import AlertRuleBadge from '@/components/AlertRuleBadge'
 import WebhookLog from '@/components/WebhookLog'
 import RuleBuilder from '@/components/RuleBuilder'
 import CopyButton from '@/components/CopyButton'
+import NotificationToggle from '@/components/NotificationToggle'
+import { notifyNewAlerts } from '@/lib/notifications'
+import { useAlertSync } from '@/hooks/useAlertSync'
 
 export default function ContractDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -32,6 +36,11 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   const [editedLabel, setEditedLabel] = useState('')
   const [editedWebhookUrl, setEditedWebhookUrl] = useState('')
   const [metadataError, setMetadataError] = useState<string | null>(null)
+
+  const sync = useAlertSync(contract?.contract_id, contract?.network, (fresh) => {
+    setAlerts(getAlerts(contract?.contract_id ?? params.id))
+    notifyNewAlerts(fresh, contract?.label ?? params.id, `/contracts/${params.id}`)
+  })
 
   useEffect(() => {
     const c = getContract(params.id)
@@ -61,6 +70,10 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
     if (editedRules.length === 0) { setRulesError('Add at least one rule'); return }
     const updated = { ...contract!, rules: editedRules }
     void syncSaveContract(updated, false)
+    if (!saveContract(updated)) {
+      setRulesError('Could not save: browser storage is full or unavailable')
+      return
+    }
     setContract(updated)
     setShowEditRules(false)
     trackEvent('rule_edit_saved', { contractId: params.id, ruleCount: editedRules.length })
@@ -124,6 +137,10 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
       webhook_url: trimmedWebhookUrl
     }
     void syncSaveContract(updated, false)
+    if (!saveContract(updated)) {
+      setMetadataError('Could not save: browser storage is full or unavailable')
+      return
+    }
     setContract(updated)
     setShowEditMetadata(false)
     trackEvent('metadata_edit_saved', { contractId: params.id })
@@ -208,6 +225,17 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
           >
             Edit Rules
           </button>
+          {process.env.NODE_ENV !== 'production' && (
+            <button
+              onClick={() => {
+                seedMockAlerts(params.id, contract.network)
+                setAlerts(getAlerts(params.id))
+              }}
+              className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+            >
+              Seed mock alerts
+            </button>
+          )}
           <button
             onClick={() => setShowDelete(true)}
             className="px-3 py-1.5 rounded-lg border border-red-800 hover:border-red-600 text-sm text-red-400 hover:text-red-300 transition-colors"
@@ -240,6 +268,15 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <p className="text-xs text-zinc-500 mb-1">{alerts.length === 0 ? 'Total Alerts' : 'Last Alert'}</p>
+          {sync.enabled && <NotificationToggle />}
+          {sync.enabled && (
+            <p className="text-xs text-zinc-500 mb-1" data-testid="sync-status">
+              <span className={sync.live ? 'text-green-400' : 'text-zinc-500'}>
+                {sync.live ? 'Live' : 'Offline'}
+              </span>
+              {sync.lastSync ? ` · synced ${new Date(sync.lastSync).toLocaleTimeString()}` : ''}
+            </p>
+          )}
           {alerts.length === 0 ? (
             <p className="text-sm text-zinc-300">No alerts yet</p>
           ) : (
