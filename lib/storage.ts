@@ -1,7 +1,8 @@
 import { WatchedContract, AlertPayload, Network } from '@/types'
+import { HORIZON_URLS } from './stellar'
 import { safeParseStorage } from './storageLogger'
 
-const CONTRACTS_KEY = 'txwatch_contracts'
+export const CONTRACTS_KEY = 'txwatch_contracts'
 const ALERTS_KEY = 'txwatch_alerts'
 const STORAGE_VERSION_KEY = 'txwatch_storage_version'
 const CURRENT_STORAGE_VERSION = 1
@@ -172,6 +173,21 @@ export function getContractByIdAndNetwork(
   return getContracts().find((c) => c.contract_id === contractId && c.network === network)
 }
 
+export class DuplicateContractError extends Error {
+  constructor(contractId: string, network: string) {
+    super(`Contract ${contractId} is already registered on ${network}`)
+    this.name = 'DuplicateContractError'
+  }
+}
+
+export function addContract(contract: WatchedContract) {
+  if (getContractByIdAndNetwork(contract.contract_id, contract.network)) {
+    throw new DuplicateContractError(contract.contract_id, contract.network)
+  }
+  saveContract(contract)
+}
+
+export function saveContract(contract: WatchedContract) {
 export function saveContract(contract: WatchedContract): boolean {
   const contracts = getContracts().filter((c) => c.id !== contract.id)
   const updated = { ...contract, updated_at: Date.now() }
@@ -207,27 +223,21 @@ export function seedMockAlerts(
   network: Network,
   count = 5
 ): void {
-  const storage = getStorage()
-  if (!storage) return
-
   const now = Date.now()
-  const alerts = Array.from({ length: count }, (_, index) => {
+  for (let index = count - 1; index >= 0; index--) {
     const sequence = index + 1
-    const hash = `MOCK-${contractId.slice(0, 10)}-${sequence.toString().padStart(2, '0')}`
-    const horizonHost = network === 'mainnet' ? 'horizon.stellar.org' : 'horizon-testnet.stellar.org'
-    return {
+    const hash = Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+    addAlert({
       label: `Mock Alert ${sequence}`,
       contract_id: contractId,
       network,
       rule_triggered: 'AnyTransaction',
-      transaction_hash: `${hash}-${Math.random().toString(16).slice(2, 18)}`,
+      transaction_hash: hash,
       amount: 10 + index * 5,
       timestamp: now - index * 15 * 60 * 1000,
-      horizon_link: `https://${horizonHost}/transactions/${hash}`,
-    }
-  })
-
-  save(ALERTS_KEY, [...alerts, ...load<AlertPayload>(ALERTS_KEY)])
+      horizon_link: `${HORIZON_URLS[network]}/transactions/${hash}`,
+    })
+  }
 }
 
 export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: string; id?: string })) {
@@ -242,13 +252,6 @@ export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: st
     return counts[a.contract_id] <= MAX_ALERTS_PER_CONTRACT
   }))
 }
-
-export function deleteAlertsByContractId(contractId: string) {
-  const alerts = load<AlertPayload>(ALERTS_KEY)
-  save(ALERTS_KEY, alerts.filter((a) => a.contract_id !== contractId))
-}
-
-export const saveAlert = addAlert
 
 export function getTodayAlertCount(): number {
   const start = new Date().setHours(0, 0, 0, 0)
