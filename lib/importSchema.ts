@@ -104,3 +104,36 @@ export function parseImport(json: string): ImportParseResult {
   })
   return { contracts, errors }
 }
+
+export type ImportMode = 'merge' | 'replace'
+export type DuplicateStrategy = 'skip' | 'overwrite'
+
+export interface ImportPlan {
+  toSave: WatchedContract[]
+  toDeleteIds: string[]
+  duplicates: WatchedContract[]
+}
+
+/** Duplicate = same contract_id + network as an existing contract. */
+export function planImport(
+  existing: WatchedContract[],
+  incoming: WatchedContract[],
+  mode: ImportMode,
+  duplicates: DuplicateStrategy,
+): ImportPlan {
+  const key = (c: WatchedContract) => `${c.network}:${c.contract_id}`
+  const byKey = new Map(existing.map((c) => [key(c), c]))
+  const dups: WatchedContract[] = []
+  const toSave: WatchedContract[] = []
+  for (const c of incoming) {
+    const match = byKey.get(key(c))
+    if (mode === 'merge' && match) {
+      dups.push(c)
+      if (duplicates === 'overwrite') toSave.push({ ...c, id: match.id })
+    } else {
+      toSave.push(c)
+    }
+  }
+  const toDeleteIds = mode === 'replace' ? existing.map((c) => c.id) : []
+  return { toSave, toDeleteIds, duplicates: dups }
+}
