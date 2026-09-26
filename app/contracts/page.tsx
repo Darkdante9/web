@@ -16,6 +16,8 @@ type SortOption = 'newest' | 'oldest' | 'label-asc' | 'label-desc'
 
 const PAGE_SIZE = 12
 
+const PREFS_KEY = 'txwatch_prefs'
+
 const NETWORK_LABELS: Record<Network, string> = {
   mainnet: 'Mainnet',
   testnet: 'Testnet',
@@ -35,6 +37,53 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'label-asc', label: 'Label A–Z' },
   { value: 'label-desc', label: 'Label Z–A' },
 ]
+
+const VIEW_MODES: ViewMode[] = ['flat', 'grouped']
+const SORT_VALUES: SortOption[] = ['newest', 'oldest', 'label-asc', 'label-desc']
+
+export function readPrefs(): { viewMode?: ViewMode; sortBy?: SortOption } {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as { viewMode?: unknown; sortBy?: unknown }
+    const prefs: { viewMode?: ViewMode; sortBy?: SortOption } = {}
+    if (VIEW_MODES.includes(parsed.viewMode as ViewMode)) {
+      prefs.viewMode = parsed.viewMode as ViewMode
+    }
+    if (SORT_VALUES.includes(parsed.sortBy as SortOption)) {
+      prefs.sortBy = parsed.sortBy as SortOption
+    }
+    return prefs
+  } catch {
+    return {}
+  }
+}
+
+export function writePrefs(prefs: { viewMode?: ViewMode; sortBy?: SortOption }) {
+  try {
+    const existing = readPrefs()
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ ...existing, ...prefs }))
+  } catch {
+    // ignore storage failures (private mode, quota, etc.)
+  }
+}
+
+export function resolveInitialPrefs(params: {
+  viewMode?: string | null
+  sortBy?: string | null
+}): { viewMode: ViewMode; sortBy: SortOption } {
+  const stored = readPrefs()
+  const urlView = params.viewMode
+  const urlSort = params.sortBy
+  return {
+    viewMode: VIEW_MODES.includes(urlView as ViewMode)
+      ? (urlView as ViewMode)
+      : stored.viewMode ?? 'flat',
+    sortBy: SORT_VALUES.includes(urlSort as SortOption)
+      ? (urlSort as SortOption)
+      : stored.sortBy ?? 'newest',
+  }
+}
 
 function sortContracts(contracts: WatchedContract[], sortBy: SortOption) {
   const sorted = [...contracts]
@@ -69,6 +118,16 @@ export default function ContractsPage() {
     // With NEXT_PUBLIC_API_URL set, the API is the source of truth.
     refreshContracts().then((r) => setAllContracts(r.contracts))
   }, [])
+
+  // Restore persisted view/sort preferences. URL params take precedence over stored prefs.
+  useEffect(() => {
+    const initial = resolveInitialPrefs({
+      viewMode: searchParams?.get('view'),
+      sortBy: searchParams?.get('sort'),
+    })
+    setViewMode(initial.viewMode)
+    setSortBy(initial.sortBy)
+  }, [searchParams])
 
   // Check for a recently-created contract id in sessionStorage and highlight it once
   useEffect(() => {
@@ -208,8 +267,12 @@ export default function ContractsPage() {
             <div className="relative">
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortOption)}
-                className="appearance-none px-3 py-2 pr-8 rounded-lg bg-zinc-800 border border-zinc-700 text-sm font-medium text-zinc-200 hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer"
+                onChange={(e) => {
+                  const next = e.target.value as SortOption
+                  setSortBy(next)
+                  writePrefs({ sortBy: next })
+                }}
+                className="appearance-none px-3 py-2 pr-8 rounded-lg bg-zinc-800 border border-zinc-700 text-sm font-medium text-zinc-200 hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               >
                 {SORT_OPTIONS.map(({ value, label }) => (
                   <option key={value} value={value}>
@@ -217,39 +280,30 @@ export default function ContractsPage() {
                   </option>
                 ))}
               </select>
-              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-zinc-500">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </span>
             </div>
           )}
 
-          <div className="flex items-center gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-lg" role="group" aria-label="View mode">
-            <button
-              type="button"
-              onClick={() => setViewMode('flat')}
-              aria-pressed={viewMode === 'flat'}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'flat'
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
-              }`}
-            >
-              Flat
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('grouped')}
-              aria-pressed={viewMode === 'grouped'}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'grouped'
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
-              }`}
-            >
-              Grouped
-            </button>
+          <div className="flex items-center gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-lg w-fit" role="group" aria-label="View mode">
+            {VIEW_MODES.map((mode) => {
+              const isActive = viewMode === mode
+              return (
+                <button
+                  key={mode}
+                  onClick={() => {
+                    setViewMode(mode)
+                    writePrefs({ viewMode: mode })
+                  }}
+                  aria-pressed={isActive}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                  }`}
+                >
+                  {mode === 'flat' ? 'Flat' : 'Grouped'}
+                </button>
+              )
+            })}
           </div>
         </div>
       </div>
@@ -271,17 +325,11 @@ export default function ContractsPage() {
             if (contracts.length === 0) return null
             return (
               <section key={network} className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`w-2.5 h-2.5 rounded-full ${NETWORK_COLORS[network]}`}
-                    aria-hidden="true"
-                  />
-                  <h2 className="text-sm font-semibold text-zinc-300">
-                    {NETWORK_LABELS[network]}
-                  </h2>
-                  <span className="text-xs text-zinc-500">{contracts.length}</span>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+                  {NETWORK_LABELS[network]}
+                  <span className="ml-2 text-zinc-600">{contracts.length}</span>
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {contracts.map((contract) => (
                     <ContractCard
                       key={contract.id}
@@ -295,7 +343,7 @@ export default function ContractsPage() {
           })}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {paginated.map((contract) => (
             <ContractCard
               key={contract.id}
@@ -312,7 +360,7 @@ export default function ContractsPage() {
             type="button"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="px-3 py-1.5 rounded-lg bg-zinc-800 text-sm font-medium text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 rounded-lg bg-zinc-800 text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Previous
           </button>
@@ -323,7 +371,7 @@ export default function ContractsPage() {
             type="button"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="px-3 py-1.5 rounded-lg bg-zinc-800 text-sm font-medium text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 rounded-lg bg-zinc-800 text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Next
           </button>
