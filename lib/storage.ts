@@ -211,13 +211,6 @@ export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: st
   }))
 }
 
-export function deleteAlertsByContractId(contractId: string) {
-  const alerts = load<AlertPayload>(ALERTS_KEY)
-  save(ALERTS_KEY, alerts.filter((a) => a.contract_id !== contractId))
-}
-
-export const saveAlert = addAlert
-
 export function getTodayAlertCount(): number {
   const start = new Date().setHours(0, 0, 0, 0)
   return load<AlertPayload>(ALERTS_KEY).filter((a) => a.timestamp >= start).length

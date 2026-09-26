@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useContracts } from '@/lib/useContracts'
-import { getTodayAlertCount, getAlerts } from '@/lib/storage'
+import { getTodayAlertCount, getAlerts, getNetworkDistribution } from '@/lib/storage'
 import ContractCard from '@/components/ContractCard'
 import EmptyState from '@/components/EmptyState'
 import NetworkBadge from '@/components/NetworkBadge'
@@ -20,10 +20,7 @@ export default function DashboardPage() {
   }, [])
 
   const activeWebhooks = contracts.filter((c) => c.webhook_url).length
-  const networkCounts = contracts.reduce<Record<Network, number>>((counts, contract) => {
-    counts[contract.network] = (counts[contract.network] ?? 0) + 1
-    return counts
-  }, {} as Record<Network, number>)
+  const networkCounts = contracts.length > 0 ? getNetworkDistribution() : ({} as Record<Network, number>)
   const networkSummary = (['mainnet', 'testnet', 'futurenet'] as Network[])
     .filter((network) => networkCounts[network])
     .map((network) => ({ network, count: networkCounts[network] }))

@@ -3,7 +3,7 @@ import {
   saveContract,
   deleteContract,
   getContracts,
-  saveAlert,
+  addAlert,
   getAlerts,
   deleteAlert,
   seedMockAlerts,
@@ -139,11 +139,11 @@ describe('duplicate contract handling', () => {
   });
 });
 
-describe('saveAlert / getAlerts — insertion order', () => {
+describe('addAlert / getAlerts — insertion order', () => {
   it('returns alerts in insertion order', () => {
-    saveAlert(alert1);
-    saveAlert(alert2);
-    saveAlert(alert3);
+    addAlert(alert1);
+    addAlert(alert2);
+    addAlert(alert3);
     const alerts = getAlerts('c1');
     expect(alerts.map((a) => (a as { id?: string }).id)).toEqual(['a1', 'a2', 'a3']);
   });
@@ -155,8 +155,8 @@ describe('saveAlert / getAlerts — insertion order', () => {
 
 describe('deleteAlert', () => {
   it('removes only the specified alert', () => {
-    saveAlert(alert1);
-    saveAlert(alert2);
+    addAlert(alert1);
+    addAlert(alert2);
     deleteAlert('a1');
     const alerts = getAlerts('c1');
     expect(alerts).toHaveLength(1);
