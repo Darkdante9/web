@@ -46,6 +46,10 @@ function emitStorageError(ctx: StorageErrorContext): void {
 }
 
 export function safeParseStorage<T>(key: string, fallback: T): T {
+  if (typeof localStorage === 'undefined') {
+    return fallback;
+  }
+
   const raw = localStorage.getItem(key);
 
   if (raw === null) {

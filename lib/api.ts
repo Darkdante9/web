@@ -1,3 +1,4 @@
+import { SIGNATURE_HEADER, signWebhookPayload } from './webhookSignature'
 import { HORIZON_URLS } from '@/lib/stellar'
 import type { Network } from '@/types'
 
@@ -44,7 +45,8 @@ export async function sendTestWebhook(
   webhookUrl: string,
   contractId: string,
   network: Network = 'testnet',
-  signalOrTimeoutMs: AbortSignal | number = 10000
+  signalOrTimeoutMs: AbortSignal | number = 10000,
+  secret?: string
 ): Promise<TestWebhookResult> {
   const payload = {
     label: 'Test Alert',
@@ -67,10 +69,13 @@ export async function sendTestWebhook(
   const signal = external ?? controller.signal
 
   try {
+    const body = JSON.stringify(payload)
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (secret) headers[SIGNATURE_HEADER] = await signWebhookPayload(secret, body)
     const res = await fetch(webhookUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      headers,
+      body,
       signal,
     })
     // The status is reported back rather than thrown on, so callers can show

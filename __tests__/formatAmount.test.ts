@@ -10,8 +10,8 @@ describe('formatAmount', () => {
     expect(formatAmount('1', 'XLM')).toBe('1.0000000 XLM');
   });
 
-  it('formats USDC with 2 decimal places', () => {
-    expect(formatAmount('150.5', 'USDC')).toBe('150.50 USDC');
+  it('formats USDC with 7 decimal places', () => {
+    expect(formatAmount('150.5', 'USDC')).toBe('150.5000000 USDC');
   });
 
   it('converts stroops to XLM', () => {
@@ -67,5 +67,69 @@ describe('formatAmountCompact', () => {
 
   it('converts stroops in compact mode', () => {
     expect(formatAmountCompact('10000000000000', 'XLM', true)).toBe('1.00M XLM');
+  });
+});
+
+describe('formatAmount i128 / BigInt-safe', () => {
+  it('formats bigint stroops above MAX_SAFE_INTEGER exactly', () => {
+    expect(formatAmount(12345678901234567890123n, 'XLM', true)).toBe('1234567890123456.7890123 XLM');
+  });
+
+  it('formats string stroops above MAX_SAFE_INTEGER exactly', () => {
+    expect(formatAmount('9007199254740993', 'XLM', true)).toBe('900719925.4740993 XLM');
+  });
+
+  it('supports arbitrary token decimals', () => {
+    expect(formatAmount('1500000000000000000', 'MYTOKEN', true, { decimals: 18 })).toBe('1.5000000 MYTOKEN');
+  });
+
+  it('handles negative stroops', () => {
+    expect(formatAmount('-15000000', 'XLM', true)).toBe('-1.5000000 XLM');
+  });
+
+  it('keeps number input working', () => {
+    expect(formatAmount(0.1, 'XLM')).toBe('0.1000000 XLM');
+  });
+
+  it('isZeroAmount accepts bigint', () => {
+    expect(isZeroAmount(0n)).toBe(true);
+    expect(isZeroAmount(1n)).toBe(false);
+  });
+});
+
+describe('formatAmount USDC / display precision', () => {
+  it('does not truncate small USDC amounts', () => {
+    expect(formatAmount('0.0012345', 'USDC')).toBe('0.0012345 USDC');
+  });
+
+  it('converts USDC stroops consistently', () => {
+    expect(formatAmount('12345', 'USDC', true)).toBe('0.0012345 USDC');
+  });
+
+  it('accepts an explicit display precision', () => {
+    expect(formatAmount('150.5', 'USDC', false, { displayDecimals: 2 })).toBe('150.50 USDC');
+  });
+});
+
+describe('formatAmountCompact unit boundaries', () => {
+  it('rolls 999999 over to M', () => {
+    expect(formatAmountCompact(999999, 'XLM')).toBe('1.00M XLM');
+  });
+
+  it('rolls 999.995 over to K', () => {
+    expect(formatAmountCompact(999.995, 'XLM')).toBe('1.00K XLM');
+  });
+
+  it('keeps 999.994 below K', () => {
+    expect(formatAmountCompact(999.994, 'XLM')).toBe('999.99 XLM');
+  });
+
+  it('keeps 999994 in K', () => {
+    expect(formatAmountCompact(999994, 'XLM')).toBe('999.99K XLM');
+  });
+
+  it('handles negatives and bigint stroops', () => {
+    expect(formatAmountCompact(-999999, 'XLM')).toBe('-1.00M XLM');
+    expect(formatAmountCompact(9999999999999n, 'XLM', true)).toBe('1.00M XLM');
   });
 });

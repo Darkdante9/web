@@ -59,7 +59,10 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   function saveRules() {
     if (editedRules.length === 0) { setRulesError('Add at least one rule'); return }
     const updated = { ...contract!, rules: editedRules }
-    saveContract(updated)
+    if (!saveContract(updated)) {
+      setRulesError('Could not save: browser storage is full or unavailable')
+      return
+    }
     setContract(updated)
     setShowEditRules(false)
     trackEvent('rule_edit_saved', { contractId: params.id, ruleCount: editedRules.length })
@@ -122,7 +125,10 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
       label: trimmedLabel,
       webhook_url: trimmedWebhookUrl
     }
-    saveContract(updated)
+    if (!saveContract(updated)) {
+      setMetadataError('Could not save: browser storage is full or unavailable')
+      return
+    }
     setContract(updated)
     setShowEditMetadata(false)
     trackEvent('metadata_edit_saved', { contractId: params.id })
