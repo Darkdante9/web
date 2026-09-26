@@ -1,29 +1,40 @@
-export interface StoredContract {
-  id: string;
-  address: string;
-  label: string;
-  network: string;
-  [key: string]: unknown;
-}
+import { WatchedContract } from '@/types'
 
-const NETWORK_ORDER: Record<string, number> = {
-  mainnet: 0,
-  testnet: 1,
-  futurenet: 2,
-};
+export type SortOption = 'newest' | 'oldest' | 'label-asc' | 'label-desc'
 
-function networkRank(network: string): number {
-  return NETWORK_ORDER[network.toLowerCase()] ?? 99;
-}
+const collator = new Intl.Collator(undefined, { sensitivity: 'base' })
 
-export function sortContracts<T extends StoredContract>(contracts: T[]): T[] {
-  return [...contracts].sort((a, b) => {
-    const netDiff = networkRank(a.network) - networkRank(b.network);
-    if (netDiff !== 0) return netDiff;
-
-    const labelDiff = a.label.toLowerCase().localeCompare(b.label.toLowerCase());
-    if (labelDiff !== 0) return labelDiff;
-
-    return a.id.localeCompare(b.id);
-  });
+/**
+ * Sort a list of watched contracts by the given option.
+ *
+ * Label sorting uses an `Intl.Collator` with `sensitivity: "base"` so that
+ * ordering is case- and locale-aware, and falls back to `created_at` (then
+ * `id`) as a stable tie-breaker so equal labels keep a deterministic order.
+ */
+export function sortContracts(
+  contracts: WatchedContract[],
+  sortBy: SortOption
+): WatchedContract[] {
+  const sorted = [...contracts]
+  switch (sortBy) {
+    case 'oldest':
+      return sorted.sort((a, b) => a.created_at - b.created_at)
+    case 'label-asc':
+      return sorted.sort(
+        (a, b) =>
+          collator.compare(a.label, b.label) ||
+          a.created_at - b.created_at ||
+          a.id.localeCompare(b.id)
+      )
+    case 'label-desc':
+      return sorted.sort(
+        (a, b) =>
+          collator.compare(b.label, a.label) ||
+          a.created_at - b.created_at ||
+          a.id.localeCompare(b.id)
+      )
+    case 'newest':
+    default:
+      return sorted.sort((a, b) => b.created_at - a.created_at)
+  }
 }
