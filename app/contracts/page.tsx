@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { WatchedContract, Network } from '@/types'
 import { getContracts, getAlerts } from '@/lib/storage'
+import { refreshContracts } from '@/lib/contractSync'
 import ContractCard from '@/components/ContractCard'
 import EmptyState from '@/components/EmptyState'
 
@@ -64,6 +65,8 @@ export default function ContractsPage() {
     const all = getContracts()
     setAllContracts(all)
     setMounted(true)
+    // With NEXT_PUBLIC_API_URL set, the API is the source of truth.
+    refreshContracts().then((r) => setAllContracts(r.contracts))
   }, [])
 
   // Check for a recently-created contract id in sessionStorage and highlight it once

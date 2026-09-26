@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { WatchedContract } from '@/types'
 import NetworkBadge from './NetworkBadge'
+import { getSyncStatuses } from '@/lib/contractSync'
 import { truncateId } from '@/lib/stellar'
 import { formatDate } from '@/lib/format'
 
@@ -13,6 +14,7 @@ interface ContractCardProps {
 
 export default function ContractCard({ contract, lastAlertTime, highlight }: ContractCardProps) {
   const hasWebhook = Boolean(contract.webhook_url)
+  const sync = getSyncStatuses()[contract.id]
   const [active, setActive] = useState(highlight)
 
   useEffect(() => {
@@ -39,6 +41,11 @@ export default function ContractCard({ contract, lastAlertTime, highlight }: Con
           </p>
         </div>
         <NetworkBadge network={contract.network} />
+        {sync && (
+          <span className={sync.state === 'error' ? 'text-xs text-red-400' : 'text-xs text-emerald-400'} title={sync.error}>
+            {sync.state === 'error' ? 'Sync failed' : 'Synced'}
+          </span>
+        )}
       </div>
 
       {/* Webhook status indicator */}

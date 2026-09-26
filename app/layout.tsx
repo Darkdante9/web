@@ -4,6 +4,7 @@ import Link from 'next/link'
 import FreighterConnect from '@/components/FreighterConnect'
 import WalletStatusBadge from '@/components/WalletStatusBadge'
 import MobileNav from '@/components/MobileNav'
+import AlertPruner from '@/components/AlertPruner'
 import StorageBootstrap from '@/components/StorageBootstrap'
 
 export const metadata: Metadata = {
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav className="hidden sm:flex items-center gap-6 text-sm text-zinc-400">
               <Link href="/dashboard" className="hover:text-zinc-100 transition-colors">Dashboard</Link>
               <Link href="/contracts" className="hover:text-zinc-100 transition-colors">Contracts</Link>
+              <Link href="/settings" className="hover:text-zinc-100 transition-colors">Settings</Link>
               <a
                 href="https://github.com/Tx-wat"
                 target="_blank"
@@ -46,6 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
 
+        <AlertPruner />
         <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
           {children}
         </main>

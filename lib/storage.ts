@@ -21,7 +21,20 @@ function load<T>(key: string): T[] {
 
 const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024 // 5MB typical limit
 const MAX_ALERTS_PER_CONTRACT = 500
-const ALERTS_RETENTION_DAYS = 90
+const DEFAULT_RETENTION_DAYS = 90
+const RETENTION_KEY = 'txwatch_alert_retention_days'
+
+export function getRetentionDays(): number {
+  const raw = Number(getStorage()?.getItem(RETENTION_KEY))
+  return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : DEFAULT_RETENTION_DAYS
+}
+
+export function setRetentionDays(days: number) {
+  const storage = getStorage()
+  if (!storage || !Number.isFinite(days) || days < 1) return
+  storage.setItem(RETENTION_KEY, String(Math.floor(days)))
+  pruneOldAlerts()
+}
 
 function getStorageSize(): number {
   const storage = getStorage()
@@ -38,10 +51,10 @@ function getStorageSize(): number {
   return size
 }
 
-function pruneOldAlerts() {
+export function pruneOldAlerts() {
   const storage = getStorage()
   if (!storage) return
-  const cutoff = Date.now() - ALERTS_RETENTION_DAYS * 24 * 60 * 60 * 1000
+  const cutoff = Date.now() - getRetentionDays() * 24 * 60 * 60 * 1000
   const alerts = load<AlertPayload>(ALERTS_KEY)
   const pruned = alerts.filter((a) => a.timestamp >= cutoff)
   if (pruned.length < alerts.length) {
@@ -251,6 +264,7 @@ export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: st
     counts[a.contract_id] = (counts[a.contract_id] ?? 0) + 1
     return counts[a.contract_id] <= MAX_ALERTS_PER_CONTRACT
   }))
+  pruneOldAlerts()
 }
 
 export function getTodayAlertCount(): number {

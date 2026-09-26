@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule } from '@/types'
+import { getContract, getAlerts } from '@/lib/storage'
+import { syncSaveContract, syncDeleteContract } from '@/lib/contractSync'
 import { getContract, deleteContract, getAlerts, saveContract, seedMockAlerts } from '@/lib/storage'
 import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
 import { formatDate, formatRuleSummary } from '@/lib/format'
@@ -53,7 +55,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   }, [params.id, router])
 
   function handleDelete() {
-    deleteContract(params.id)
+    void syncDeleteContract(params.id)
     router.push('/contracts')
   }
 
@@ -67,6 +69,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   function saveRules() {
     if (editedRules.length === 0) { setRulesError('Add at least one rule'); return }
     const updated = { ...contract!, rules: editedRules }
+    void syncSaveContract(updated, false)
     if (!saveContract(updated)) {
       setRulesError('Could not save: browser storage is full or unavailable')
       return
@@ -133,6 +136,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
       label: trimmedLabel,
       webhook_url: trimmedWebhookUrl
     }
+    void syncSaveContract(updated, false)
     if (!saveContract(updated)) {
       setMetadataError('Could not save: browser storage is full or unavailable')
       return

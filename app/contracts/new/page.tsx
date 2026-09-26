@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertRule, Network, WatchedContract } from '@/types'
 import { isValidContractId, isValidUrl } from '@/lib/stellar'
+import { getContracts } from '@/lib/storage'
+import { syncSaveContract } from '@/lib/contractSync'
 import { addContract, getContracts } from '@/lib/storage'
 import { sendTestWebhook } from '@/lib/api'
 import { generateWebhookSecret } from '@/lib/webhookSignature'
@@ -122,6 +124,7 @@ export default function NewContractPage() {
       created_at: Date.now(),
       updated_at: Date.now(),
     }
+    await syncSaveContract(contract, true)
     addContract(contract)
     if (!saveContract(contract)) {
       setToast({ message: 'Could not save contract: browser storage is full or unavailable.', type: 'error' })
