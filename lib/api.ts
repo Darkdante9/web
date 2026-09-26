@@ -1,4 +1,4 @@
-import { HORIZON_URLS } from '@/lib/stellar'
+import { horizonUrl } from '@/lib/stellar'
 import type { Network } from '@/types'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
@@ -88,7 +88,7 @@ export async function sendTestWebhook(
     transaction_hash:
       'TEST_HASH_0000000000000000000000000000000000000000000000000000000000000000',
     timestamp: Date.now(),
-    horizon_link: `${HORIZON_URLS[network]}/transactions/test`,
+    horizon_link: `${horizonUrl(network)}/transactions/test`,
   }
 
   // Callers either hand us their own AbortSignal or rely on the default timeout.
