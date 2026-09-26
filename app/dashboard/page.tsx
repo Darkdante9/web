@@ -9,6 +9,8 @@ import EmptyState from '@/components/EmptyState'
 import NetworkBadge from '@/components/NetworkBadge'
 import { Network } from '@/types'
 
+const DASHBOARD_CARD_LIMIT = 6
+
 export default function DashboardPage() {
   const { contracts } = useContracts()
   const [alertsToday, setAlertsToday] = useState(0)
@@ -62,6 +64,17 @@ export default function DashboardPage() {
     const alerts = getAlerts(contractId)
     return alerts[0]?.timestamp
   }
+
+  // Sort by most recent alert (descending), then by label (ascending).
+  const sortedContracts = [...contracts].sort((a, b) => {
+    const aAlert = lastAlertTime(a.id) ?? 0
+    const bAlert = lastAlertTime(b.id) ?? 0
+    if (bAlert !== aAlert) return bAlert - aAlert
+    return a.label.localeCompare(b.label)
+  })
+
+  const visibleContracts = sortedContracts.slice(0, DASHBOARD_CARD_LIMIT)
+  const hasMoreContracts = sortedContracts.length > DASHBOARD_CARD_LIMIT
 
   if (!mounted) return null
 
@@ -132,10 +145,22 @@ export default function DashboardPage() {
           }
         />
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {contracts.map((c) => (
-            <ContractCard key={c.id} contract={c} lastAlertTime={lastAlertTime(c.id)} />
-          ))}
+        <div className="space-y-4">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {visibleContracts.map((c) => (
+              <ContractCard key={c.id} contract={c} lastAlertTime={lastAlertTime(c.id)} />
+            ))}
+          </div>
+          {hasMoreContracts && (
+            <div className="flex justify-center">
+              <Link
+                href="/contracts"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm font-medium text-zinc-300 transition-colors"
+              >
+                View all contracts
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>
