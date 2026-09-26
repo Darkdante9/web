@@ -30,7 +30,7 @@ function getStorageSize(): number {
     if (!key) continue
     const value = storage.getItem(key)
     if (value !== null) {
-      size += value.length + key.length
+      size += (value.length + key.length) * 2 // UTF-16: 2 bytes per code unit
     }
   }
   return size
@@ -43,7 +43,11 @@ function pruneOldAlerts() {
   const alerts = load<AlertPayload>(ALERTS_KEY)
   const pruned = alerts.filter((a) => a.timestamp >= cutoff)
   if (pruned.length < alerts.length) {
-    storage.setItem(ALERTS_KEY, JSON.stringify(pruned))
+    try {
+      storage.setItem(ALERTS_KEY, JSON.stringify(pruned))
+    } catch {
+      // best effort
+    }
   }
 }
 
@@ -57,9 +61,37 @@ function trimAlertsToCutoff(cutoff: number) {
   }
 }
 
-function save<T>(key: string, data: T[]) {
+function isQuotaError(err: unknown): boolean {
+  const e = err as { name?: string; code?: number } | null
+  return (
+    !!e &&
+    (e.name === 'QuotaExceededError' ||
+      e.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+      e.code === 22 ||
+      e.code === 1014)
+  )
+}
+
+// Writes a value; on quota errors prunes old alerts and retries once.
+function writeItem(storage: Storage, key: string, value: string): boolean {
+  try {
+    storage.setItem(key, value)
+    return true
+  } catch (err) {
+    if (!isQuotaError(err)) return false
+  }
+  pruneOldAlerts()
+  try {
+    storage.setItem(key, value)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function save<T>(key: string, data: T[]): boolean {
   const storage = getStorage()
-  if (!storage) return
+  if (!storage) return false
 
   if (key !== ALERTS_KEY) {
     pruneOldAlerts()
@@ -71,17 +103,17 @@ function save<T>(key: string, data: T[]) {
       const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
       data = (data as AlertPayload[]).filter((a) => a.timestamp >= cutoff) as unknown as T[]
     }
-    storage.setItem(key, JSON.stringify(data))
-    return
+    return writeItem(storage, key, JSON.stringify(data))
   }
 
-  storage.setItem(key, JSON.stringify(data))
+  const ok = writeItem(storage, key, JSON.stringify(data))
 
   const size = getStorageSize()
   if (size > STORAGE_QUOTA_BYTES * 0.9) {
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
     trimAlertsToCutoff(cutoff)
   }
+  return ok
 }
 
 function getStorageVersion(): number {
@@ -128,10 +160,10 @@ export function getContractByIdAndNetwork(
   return getContracts().find((c) => c.contract_id === contractId && c.network === network)
 }
 
-export function saveContract(contract: WatchedContract) {
+export function saveContract(contract: WatchedContract): boolean {
   const contracts = getContracts().filter((c) => c.id !== contract.id)
   const updated = { ...contract, updated_at: Date.now() }
-  save(CONTRACTS_KEY, [...contracts, updated])
+  return save(CONTRACTS_KEY, [...contracts, updated])
 }
 
 export function deleteContract(id: string) {

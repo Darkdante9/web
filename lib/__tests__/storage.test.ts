@@ -172,3 +172,33 @@ describe('corrupted storage', () => {
     clearStorageErrorHandlers();
   });
 });
+
+describe('quota handling', () => {
+  const realSet = localStorageMock.setItem;
+  afterEach(() => { localStorageMock.setItem = realSet; });
+
+  function quotaError() {
+    const e = new Error('full');
+    e.name = 'QuotaExceededError';
+    return e;
+  }
+
+  it('returns false instead of throwing when storage always fails', () => {
+    localStorageMock.setItem = () => { throw quotaError(); };
+    expect(saveContract(contract1)).toBe(false);
+  });
+
+  it('retries once after quota error and returns true on success', () => {
+    let calls = 0;
+    localStorageMock.setItem = (k: string, v: string) => {
+      if (calls++ === 0) throw quotaError();
+      realSet(k, v);
+    };
+    expect(saveContract(contract1)).toBe(true);
+    expect(getContracts()).toHaveLength(1);
+  });
+
+  it('returns true on normal save', () => {
+    expect(saveContract(contract1)).toBe(true);
+  });
+});
