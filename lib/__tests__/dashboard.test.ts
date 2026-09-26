@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   getContracts,
   saveContract,
@@ -7,6 +7,7 @@ import {
   addAlert,
   getAlerts,
   getNetworkDistribution,
+  onAlertsChange,
 } from '../storage'
 import { WatchedContract, AlertPayload } from '@/types'
 
@@ -172,5 +173,66 @@ describe('getAlerts — per contract filter', () => {
     expect(getAlerts('CONTRACT_A')).toHaveLength(1)
     expect(getAlerts('CONTRACT_B')).toHaveLength(1)
     expect(getAlerts('CONTRACT_C')).toHaveLength(0)
+  })
+})
+
+// ── Alerts today — refresh triggers (issue #49) ──────────────────────────────
+
+describe('alerts today — refresh triggers', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('recomputes the count when alerts change via onAlertsChange', () => {
+    let count = getTodayAlertCount()
+    expect(count).toBe(0)
+
+    const unsubscribe = onAlertsChange(() => {
+      count = getTodayAlertCount()
+    })
+
+    addAlert(makeAlert({ transaction_hash: 'tx-new' }))
+    expect(count).toBe(1)
+
+    unsubscribe()
+  })
+
+  it('recomputes the count when the window regains focus', () => {
+    let count = getTodayAlertCount()
+    expect(count).toBe(0)
+
+    const onFocus = () => {
+      count = getTodayAlertCount()
+    }
+    window.addEventListener('focus', onFocus)
+
+    addAlert(makeAlert({ transaction_hash: 'tx-focus' }))
+    window.dispatchEvent(new Event('focus'))
+    expect(count).toBe(1)
+
+    window.removeEventListener('focus', onFocus)
+  })
+
+  it('recomputes the count at local midnight so it rolls over', () => {
+    vi.useFakeTimers()
+    // Start at 23:59:30 local time so midnight is 30s away.
+    const start = new Date(2024, 0, 1, 23, 59, 30, 0)
+    vi.setSystemTime(start)
+
+    addAlert(makeAlert({ transaction_hash: 'tx-today', timestamp: start.getTime() }))
+    let count = getTodayAlertCount()
+    expect(count).toBe(1)
+
+    // Schedule a recompute at the next local midnight.
+    const nextMidnight = new Date(2024, 0, 2, 0, 0, 0, 0)
+    const delay = nextMidnight.getTime() - start.getTime()
+    const timer = setTimeout(() => {
+      count = getTodayAlertCount()
+    }, delay)
+
+    vi.advanceTimersByTime(delay)
+    expect(count).toBe(0)
+
+    clearTimeout(timer)
   })
 })

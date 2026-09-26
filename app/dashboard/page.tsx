@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useContracts } from '@/lib/useContracts'
-import { getTodayAlertCount, getAlerts, getNetworkDistribution } from '@/lib/storage'
+import { getTodayAlertCount, getAlerts, getNetworkDistribution, onAlertsChange } from '@/lib/storage'
 import ContractCard from '@/components/ContractCard'
 import EmptyState from '@/components/EmptyState'
 import NetworkBadge from '@/components/NetworkBadge'
@@ -14,10 +14,43 @@ export default function DashboardPage() {
   const [alertsToday, setAlertsToday] = useState(0)
   const [mounted, setMounted] = useState(false)
 
-  useEffect(() => {
+  const refreshAlertsToday = useCallback(() => {
     setAlertsToday(getTodayAlertCount())
-    setMounted(true)
   }, [])
+
+  useEffect(() => {
+    refreshAlertsToday()
+    setMounted(true)
+  }, [refreshAlertsToday])
+
+  // Recompute when alerts change (e.g. another tab or a future API sync).
+  useEffect(() => {
+    const unsubscribe = onAlertsChange(refreshAlertsToday)
+    return unsubscribe
+  }, [refreshAlertsToday])
+
+  // Recompute when the window regains focus.
+  useEffect(() => {
+    window.addEventListener('focus', refreshAlertsToday)
+    return () => window.removeEventListener('focus', refreshAlertsToday)
+  }, [refreshAlertsToday])
+
+  // Recompute at local midnight so the count rolls over without a reload.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>
+
+    function scheduleMidnight() {
+      const now = new Date()
+      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+      timer = setTimeout(() => {
+        refreshAlertsToday()
+        scheduleMidnight()
+      }, midnight.getTime() - now.getTime())
+    }
+
+    scheduleMidnight()
+    return () => clearTimeout(timer)
+  }, [refreshAlertsToday])
 
   const activeWebhooks = contracts.filter((c) => c.webhook_url).length
   const networkCounts = contracts.length > 0 ? getNetworkDistribution() : ({} as Record<Network, number>)
