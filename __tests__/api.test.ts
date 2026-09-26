@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { apiFetch, sendTestWebhook } from '@/lib/api'
+import { apiFetch, joinUrl, sendTestWebhook } from '@/lib/api'
 
 global.fetch = vi.fn()
 
@@ -12,7 +12,8 @@ describe('apiFetch', () => {
     const mockData = { id: 1 }
     ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(mockData),
+      status: 200,
+      text: () => Promise.resolve(JSON.stringify(mockData)),
     })
 
     const result = await apiFetch('/test', {
@@ -28,7 +29,8 @@ describe('apiFetch', () => {
     const init = (global.fetch as unknown as { mock: { calls: unknown[][] } }).mock
       .calls[0][1] as RequestInit
     const sent = init.headers as Headers
-    expect(sent.get('Content-Type')).toBe('application/json')
+    expect(sent.get('X-Custom')).toBe('value')
+    expect(sent.has('Content-Type')).toBe(false)
     expect(sent.get('X-Custom')).toBe('value')
     expect(result).toEqual(mockData)
   })
@@ -88,5 +90,56 @@ describe('sendTestWebhook', () => {
       status: 404,
       ok: false,
     })
+  })
+})
+
+describe('apiFetch hardening', () => {
+  const f = () => global.fetch as unknown as ReturnType<typeof vi.fn>
+
+  it('returns undefined for 204 and empty bodies', async () => {
+    f().mockResolvedValueOnce({ ok: true, status: 204, text: () => Promise.resolve('') })
+    await expect(apiFetch('/x', { method: 'DELETE' })).resolves.toBeUndefined()
+    f().mockResolvedValueOnce({ ok: true, status: 200, text: () => Promise.resolve('') })
+    await expect(apiFetch('/x')).resolves.toBeUndefined()
+  })
+
+  it('sets Content-Type only when a body is sent', async () => {
+    f().mockResolvedValue({ ok: true, status: 200, text: () => Promise.resolve('{}') })
+    await apiFetch('/x', { method: 'POST', body: '{}' })
+    const init = f().mock.calls.at(-1)![1] as RequestInit
+    expect((init.headers as Headers).get('Content-Type')).toBe('application/json')
+  })
+
+  it('times out and aborts the request', async () => {
+    f().mockImplementation((_u: string, init: RequestInit) =>
+      new Promise((_, reject) => {
+        init.signal!.addEventListener('abort', () =>
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+        )
+      })
+    )
+    await expect(apiFetch('/x', { timeoutMs: 10 })).rejects.toThrow('Request timed out')
+  })
+
+  it('propagates a caller abort', async () => {
+    f().mockImplementation((_u: string, init: RequestInit) =>
+      new Promise((_, reject) => {
+        init.signal!.addEventListener('abort', () =>
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+        )
+      })
+    )
+    const ac = new AbortController()
+    const p = apiFetch('/x', { signal: ac.signal })
+    ac.abort()
+    await expect(p).rejects.toThrow('aborted')
+  })
+})
+
+describe('joinUrl', () => {
+  it('joins with a single slash', () => {
+    expect(joinUrl('http://a/', '/b')).toBe('http://a/b')
+    expect(joinUrl('http://a', 'b')).toBe('http://a/b')
+    expect(joinUrl('', '/b')).toBe('/b')
   })
 })

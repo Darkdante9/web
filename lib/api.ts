@@ -3,35 +3,69 @@ import type { Network } from '@/types'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 
+/** Default request timeout for apiFetch, in milliseconds. */
+export const API_TIMEOUT_MS = 15000
+
+/** Join a base URL and a path with exactly one slash between them. */
+export function joinUrl(base: string, path: string): string {
+  if (/^https?:\/\//i.test(path)) return path
+  if (!base) return path
+  return `${base.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
+}
+
 export async function apiFetch<T>(
   path: string,
-  options?: RequestInit
+  options?: RequestInit & { timeoutMs?: number }
 ): Promise<T> {
-  const headers = new Headers(options?.headers)
-  if (!headers.has('content-type')) {
+  const { timeoutMs = API_TIMEOUT_MS, ...init } = options ?? {}
+  const headers = new Headers(init.headers)
+  if (init.body != null && !headers.has('content-type')) {
     headers.set('Content-Type', 'application/json')
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers,
-  })
-
-  if (!res.ok) {
-    const text = await res.text()
-    let message = `HTTP ${res.status}`
-    if (text) {
-      try {
-        const body = JSON.parse(text)
-        message = body?.message || body?.error || text
-      } catch {
-        message = text
-      }
-    }
-    throw new Error(message)
+  // Combine the caller's signal (if any) with a timeout signal.
+  const controller = new AbortController()
+  const onCallerAbort = () => controller.abort()
+  if (init.signal) {
+    if (init.signal.aborted) controller.abort()
+    else init.signal.addEventListener('abort', onCallerAbort, { once: true })
   }
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
-  return res.json() as Promise<T>
+  try {
+    const res = await fetch(joinUrl(BASE_URL, path), {
+      ...init,
+      headers,
+      signal: controller.signal,
+    })
+
+    if (!res.ok) {
+      const text = await res.text()
+      let message = `HTTP ${res.status}`
+      if (text) {
+        try {
+          const body = JSON.parse(text)
+          message = body?.message || body?.error || text
+        } catch {
+          message = text
+        }
+      }
+      throw new Error(message)
+    }
+
+    if (res.status === 204) return undefined as T
+    const text = await res.text()
+    if (!text) return undefined as T
+    return JSON.parse(text) as T
+  } catch (error) {
+    if ((error as { name?: string })?.name === 'AbortError' && !init.signal?.aborted) {
+      throw new Error('Request timed out')
+    }
+    throw error
+  } finally {
+    clearTimeout(timeoutId)
+    init.signal?.removeEventListener('abort', onCallerAbort)
+  }
 }
 
 /** Result of a test webhook delivery: the HTTP status and whether it succeeded. */
