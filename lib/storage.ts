@@ -1,4 +1,5 @@
 import { WatchedContract, AlertPayload, Network } from '@/types'
+import { safeParseStorage } from './storageLogger'
 
 const CONTRACTS_KEY = 'txwatch_contracts'
 const ALERTS_KEY = 'txwatch_alerts'
@@ -13,11 +14,7 @@ function getStorage(): Storage | undefined {
 function load<T>(key: string): T[] {
   const storage = getStorage()
   if (!storage) return []
-  try {
-    return JSON.parse(storage.getItem(key) ?? '[]')
-  } catch {
-    return []
-  }
+  return safeParseStorage<T[]>(key, [])
 }
 
 const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024 // 5MB typical limit

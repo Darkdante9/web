@@ -7,6 +7,7 @@ import {
   getAlerts,
   deleteAlert,
 } from '../storage';
+import { onStorageError, clearStorageErrorHandlers } from '../storageLogger';
 
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -158,5 +159,16 @@ describe('deleteAlert', () => {
     const alerts = getAlerts('c1');
     expect(alerts).toHaveLength(1);
     expect((alerts[0] as { id?: string }).id).toBe('a2');
+  });
+});
+
+describe('corrupted storage', () => {
+  it('triggers the registered storage error handler and returns []', () => {
+    const keys: string[] = [];
+    onStorageError((ctx) => keys.push(ctx.key));
+    localStorage.setItem('txwatch_contracts', '{broken');
+    expect(getContracts()).toEqual([]);
+    expect(keys).toEqual(['txwatch_contracts']);
+    clearStorageErrorHandlers();
   });
 });
